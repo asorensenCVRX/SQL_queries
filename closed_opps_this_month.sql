@@ -1,0 +1,45 @@
+SELECT
+    CLOSE_YYYYMM,
+    IMPLANTED_YYYYMM,
+    ACT_ID,
+    ACCOUNT_INDICATION__C,
+    OPP_ID,
+    [NAME],
+    OPP_OWNER_EMAIL,
+    AM_FOR_CREDIT_EMAIL,
+    ACT_OWNER_NAME,
+    ACT_OWNER_EMAIL,
+    SALES,
+    ISIMPL,
+    REASON_FOR_IMPLANT__C,
+    PHYSICIAN,
+    [PHYSICIAN_ID],
+    ISNULL(T.EMAIL, T2.EMAIL) AS FCE_PO_EMAIL,
+    ISNULL(T.PO_PER, T2.PO_PER) AS PO_PER,
+    ISNULL(T.[PO_%], T2.[PO_%]) AS [PO_%]
+FROM
+    qryOpps O
+    LEFT JOIN (
+        SELECT
+            *
+        FROM
+            tblFCE_TGT_PO
+        WHERE
+            YYYYMM_END >= FORMAT(GETDATE(), 'yyyy_MM')
+    ) T ON O.ACT_ID = T.OBJ_ID
+    AND T.[TYPE] = 'ACCT'
+    LEFT JOIN (
+        SELECT
+            *
+        FROM
+            tblFCE_TGT_PO
+        WHERE
+            YYYYMM_END >= FORMAT(GETDATE(), 'yyyy_MM')
+    ) t2 ON O.PHYSICIAN_ID = T2.OBJ_ID
+    AND T2.[TYPE] = 'DOC'
+WHERE
+    CLOSE_YYYYMM = '2024_08' -- AND ISIMPL = 1
+    AND OPP_STATUS = 'CLOSED'
+    AND SHIPPINGCOUNTRYCODE = 'US'
+ORDER BY
+    8
