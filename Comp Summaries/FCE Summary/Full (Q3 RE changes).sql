@@ -164,6 +164,7 @@ FROM
                                     [DT] = CAST(DATEADD(mm, -1, GETDATE()) AS DATE)
                             )
                             AND YYYYMM >= '2024_07'
+                            AND c1.SALES_CREDIT_FCE_EMAIL = a.eid
                     ),
                     0
                 )
