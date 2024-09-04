@@ -24,6 +24,7 @@ FROM
             qryOpps
         WHERE
             CLOSE_YYYY = 2023
+            AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         GROUP BY
             ACT_ID
         HAVING
@@ -37,6 +38,7 @@ FROM
             qryOpps
         WHERE
             CLOSE_YYYY = 2024
+            AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         GROUP BY
             ACT_ID
         HAVING
@@ -66,19 +68,18 @@ FROM
         WHERE
             T.RN = 1
     ) AO ON A.ID = AO.ACT_ID
-    LEFT JOIN qryReport_Ladder RL ON U.NAME = RL.NAME_REP
-WHERE
-    A.ID IN (
-        SELECT
-            DISTINCT act_id
-        FROM
-            qryOpps
-        WHERE
-            CLOSE_YYYY = 2023
-        GROUP BY
-            ACT_ID
-        HAVING
-            sum(sales) > 0
-    )
+    LEFT JOIN qryReport_Ladder RL ON U.NAME = RL.NAME_REP -- WHERE
+    --     A.ID IN (
+    --         SELECT
+    --             DISTINCT act_id
+    --         FROM
+    --             qryOpps
+    --         WHERE
+    --             CLOSE_YYYY = 2023
+    --         GROUP BY
+    --             ACT_ID
+    --         HAVING
+    --             sum(sales) > 0
+    --     )
 ORDER BY
     4;
