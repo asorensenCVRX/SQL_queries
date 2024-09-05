@@ -65,7 +65,7 @@ FROM
                                 O.SALES_CREDIT_REP_EMAIL
                             )
                         ),
-                        O.OPP_OWNER_EMAIL
+                        O.AM_FOR_CREDIT_EMAIL
                     ) AS SALES_CREDIT_REP_EMAIL,
                     INDICATION_FOR_USE__C,
                     REASON_FOR_IMPLANT__C,
