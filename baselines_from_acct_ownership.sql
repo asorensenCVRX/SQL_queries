@@ -25,6 +25,9 @@ FROM
         WHERE
             CLOSE_YYYY = 2023
             AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+            AND REASON_FOR_IMPLANT__C = 'De novo'
+            AND SHIPPINGCOUNTRYCODE = 'US'
+            AND OPP_STATUS <> 'CANCELLED'
         GROUP BY
             ACT_ID
         HAVING
@@ -39,6 +42,8 @@ FROM
         WHERE
             CLOSE_YYYY = 2024
             AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+            AND SHIPPINGCOUNTRYCODE = 'US'
+            AND OPP_STATUS <> 'CANCELLED'
         GROUP BY
             ACT_ID
         HAVING
