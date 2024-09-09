@@ -1,4 +1,4 @@
-DECLARE @YYYY_MM AS NVARCHAR(7) = '2024_07';
+DECLARE @YYYY_MM AS NVARCHAR(7) = '2024_08';
 
 
 -- INSERT INTO  tblAlign_Opp
@@ -77,7 +77,7 @@ WHERE
     --     OR ACT_OWNER_EMAIL <> SALES_CREDIT_REP_EMAIL
     -- ) 
     ------------Integrity Checks
-    --AND z.OPP_ID is not null  
+    -- AND z.OPP_ID is not null  
     -- and Z.OPP_ID IN ('0064u00001HnevLAAR')
     -- and a.OPP_ID = '0064u00001HnevLAAR'
 ORDER BY

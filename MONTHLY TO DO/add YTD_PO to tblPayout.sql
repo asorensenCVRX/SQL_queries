@@ -6,10 +6,10 @@ DECLARE @role VARCHAR(25);
 
 /***** ADJUST THESE VALUES ONLY *****/
 /***** REMEMBER TO DO THIS FOR REPS, FCES AND RMS *****/
-SET @yyyymm = '2024_07';
+SET @yyyymm = '2024_08';
 SET @year = '2024';
 SET @quarter = '2024_Q3';
-SET @role = 'RM';
+SET @role = 'FCE';
 /**************************************************/
 
 /*** This query is an integrity check to delete existing YTD_POs for the same period they are being inserted ***/
@@ -23,8 +23,8 @@ WHERE
 
 
 /***************/
--- INSERT INTO
---     tblPayout
+INSERT INTO
+    tblPayout
 /**************/
 SELECT
     @yyyymm AS YYYYMM,

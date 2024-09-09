@@ -1,10 +1,9 @@
 DECLARE @SUBMIT_YYYYMM NVARCHAR(7) = '2024_08',
-@PO_YYYYMM NVARCHAR(7) = '2024_07' 
-
+@PO_YYYYMM NVARCHAR(7) = '2024_08'
 -- INSERT INTO
 --        tblCPAS_PO
 SELECT
-       *
+       DISTINCT *
 FROM
        (
               SELECT

@@ -1,4 +1,4 @@
-DECLARE @YYYYMM AS NVARCHAR(7) = '2024_08'
+DECLARE @YYYYMM AS NVARCHAR(7) = '2024_09'
 SELECT
     *
 FROM
@@ -15,13 +15,17 @@ FROM
             PHYSICIAN_ID,
             OPP_OWNER_EMAIL,
             /* first, bring in the emails on the splits table. If those are null, bring in the email from tblAlign_Opp.
-             If that's null, bring in the sales_credit_rep_email from qryOpps */
+             If that's null, bring in the sales_credit_rep_email from qryOpps.
+             Finally, if that's null, bring in the opp_owner from qryOpps. */
             ISNULL(
-                splits.REP_EMAIL,
                 ISNULL(
-                    AO.EMAIL,
-                    O.SALES_CREDIT_REP_EMAIL
-                )
+                    splits.REP_EMAIL,
+                    ISNULL(
+                        AO.EMAIL,
+                        O.SALES_CREDIT_REP_EMAIL
+                    )
+                ),
+                O.OPP_OWNER_EMAIL
             ) AS SALES_CREDIT_REP_EMAIL,
             INDICATION_FOR_USE__C,
             REASON_FOR_IMPLANT__C,
@@ -69,4 +73,4 @@ WHERE
         CLOSE_YYYYMM = @YYYYMM
         OR IMPLANTED_YYYYMM = @YYYYMM
     )
-    -- AND SALES_CREDIT_REP_EMAIL = 'jrussell@cvrx.com'
+    -- AND SALES_CREDIT_REP_EMAIL = 'jelinburg@cvrx.com'
