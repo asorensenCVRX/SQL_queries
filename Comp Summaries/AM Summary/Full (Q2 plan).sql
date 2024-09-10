@@ -28,6 +28,7 @@ SELECT
        A.FCE_DEDUCTION,
        a.SPIFF_DEDUCTION,
        ISNULL(SP.PO, 0) [CPAS_SPIFF_PO],
+       ISNULL(SP2.PO, 0) [IMPLANT_SPIFF_PO],
        ISNULL(BAT.BAT_IMPLANT_PO, 0) + ISNULL(A.AM_TTL_PO, 0) [AM_TTL_PO],
        SUM(
               ISNULL(
@@ -70,7 +71,7 @@ SELECT
                      ELSE ISNULL(BAT.BAT_IMPLANT_PO, 0) + ISNULL(A.AM_TTL_PO, 0) + ISNULL(D.AMT, 0) + ISNULL(SP.PO, 0)
               END,
               0
-       ) AS [PO_AMT]
+       ) + ISNULL(SP2.PO, 0) AS [PO_AMT]
        /***** COMMENT OUT THIS *****/
        -- INTO dbo.tmpAM_PO
        /**********/
@@ -164,11 +165,27 @@ FROM
                      EMAIL
               FROM
                      [dbo].[tblCPAS_PO]
+              WHERE
+                     SPIF_TYPE = 'CPAS'
               GROUP BY
                      SPIF_PO_YYYYMM,
                      EMAIL
        ) SP ON ISNULL(A.SALES_CREDIT_REP_EMAIL, B.EMP_EMAIL) = SP.EMAIL
        AND sp.SPIF_PO_YYYYMM = ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM])
+       LEFT JOIN (
+              SELECT
+                     SPIF_PO_YYYYMM,
+                     ISNULL(SUM(PO), 0) [PO],
+                     EMAIL
+              FROM
+                     [dbo].[tblCPAS_PO]
+              WHERE
+                     SPIF_TYPE = 'IMPLANT'
+              GROUP BY
+                     SPIF_PO_YYYYMM,
+                     EMAIL
+       ) SP2 ON ISNULL(A.SALES_CREDIT_REP_EMAIL, B.EMP_EMAIL) = SP2.EMAIL
+       AND sp2.SPIF_PO_YYYYMM = ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM])
 WHERE
        ISNULL(A.Role, B.ROLE) = 'REP'
        AND ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM]) = (
