@@ -29,7 +29,7 @@ SELECT
        a.SPIFF_DEDUCTION,
        ISNULL(SP.PO, 0) [CPAS_SPIFF_PO],
        ISNULL(SP2.PO, 0) [IMPLANT_SPIFF_PO],
-       ISNULL(SP3.PO, 0) [REVENUE_SPIFF_PO],
+       ISNULL(SP3.PO, 0) [BULK_SPIFF_PO],
        ISNULL(BAT.BAT_IMPLANT_PO, 0) + ISNULL(A.AM_TTL_PO, 0) [AM_TTL_PO],
        SUM(
               ISNULL(
@@ -195,7 +195,7 @@ FROM
               FROM
                      [dbo].[tblCPAS_PO]
               WHERE
-                     SPIF_TYPE = 'REVENUE'
+                     SPIF_TYPE = 'BULK'
               GROUP BY
                      SPIF_PO_YYYYMM,
                      EMAIL
@@ -248,7 +248,7 @@ ORDER BY
 --                      CAST(A.AM_TTL_PO AS varchar) AS AM_TTL_PO,
 --                      CAST(A.[CPAS_SPIFF_PO] AS varchar) [CPAS_SPIFF_PO],
 --                      CAST(A.IMPLANT_SPIFF_PO AS VARCHAR) [IMPLANT_SPIFF_PO],
---                      CAST(A.REVENUE_SPIFF_PO AS VARCHAR) [REVENUE_SPIFF_PO],
+--                      CAST(A.BULK_SPIFF_PO AS VARCHAR) [BULK_SPIFF_PO],
 --                      --CAST(A.AM_TTL_PO_QTD as varchar) as AM_TTL_PO_QTD,
 --                      CAST(A.PO_FREQ AS varchar) AS PO_FREQ,
 --                      CAST(A.GUR_AMT AS varchar) AS GUR_AMT,
@@ -289,7 +289,7 @@ ORDER BY
 --                      AM_TTL_PO,
 --                      [CPAS_SPIFF_PO],
 --                      [IMPLANT_SPIFF_PO],
---                      [REVENUE_SPIFF_PO],
+--                      [BULK_SPIFF_PO],
 --                      --PO_FREQ, 
 --                      GUR_AMT,
 --                      ADJUSTMENTS,
