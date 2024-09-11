@@ -29,6 +29,7 @@ SELECT
        a.SPIFF_DEDUCTION,
        ISNULL(SP.PO, 0) [CPAS_SPIFF_PO],
        ISNULL(SP2.PO, 0) [IMPLANT_SPIFF_PO],
+       ISNULL(SP3.PO, 0) [REVENUE_SPIFF_PO],
        ISNULL(BAT.BAT_IMPLANT_PO, 0) + ISNULL(A.AM_TTL_PO, 0) [AM_TTL_PO],
        SUM(
               ISNULL(
@@ -71,7 +72,7 @@ SELECT
                      ELSE ISNULL(BAT.BAT_IMPLANT_PO, 0) + ISNULL(A.AM_TTL_PO, 0) + ISNULL(D.AMT, 0) + ISNULL(SP.PO, 0)
               END,
               0
-       ) + ISNULL(SP2.PO, 0) AS [PO_AMT]
+       ) + ISNULL(SP2.PO, 0) + ISNULL(SP3.PO, 0) AS [PO_AMT]
        /***** COMMENT OUT THIS *****/
        -- INTO dbo.tmpAM_PO
        /**********/
@@ -186,6 +187,20 @@ FROM
                      EMAIL
        ) SP2 ON ISNULL(A.SALES_CREDIT_REP_EMAIL, B.EMP_EMAIL) = SP2.EMAIL
        AND sp2.SPIF_PO_YYYYMM = ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM])
+       LEFT JOIN (
+              SELECT
+                     SPIF_PO_YYYYMM,
+                     ISNULL(SUM(PO), 0) [PO],
+                     EMAIL
+              FROM
+                     [dbo].[tblCPAS_PO]
+              WHERE
+                     SPIF_TYPE = 'REVENUE'
+              GROUP BY
+                     SPIF_PO_YYYYMM,
+                     EMAIL
+       ) SP3 ON ISNULL(A.SALES_CREDIT_REP_EMAIL, B.EMP_EMAIL) = SP3.EMAIL
+       AND SP3.SPIF_PO_YYYYMM = ISNULL(A.CLOSE_YYYYMM, B.YYYYMM)
 WHERE
        ISNULL(A.Role, B.ROLE) = 'REP'
        AND ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM]) = (
@@ -196,7 +211,7 @@ WHERE
               WHERE
                      [DT] = CAST(DATEADD(mm, -1, GETDATE()) AS DATE)
        )
-       AND LEFT(ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM]), 4) = '2024' --AND ISNULL(A.SALES_CREDIT_REP_EMAIL, B.EMP_EMAIL) <> 'ccastillo@cvrx.com'
+       AND LEFT(ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM]), 4) = '2024'
 ORDER BY
        ISNULL(A.SALES_CREDIT_REP_EMAIL, B.EMP_EMAIL),
        ISNULL(A.[CLOSE_YYYYMM], B.[YYYYMM]);
@@ -231,9 +246,9 @@ ORDER BY
 --                      CAST(A.AM_L2_PO AS varchar) AS AM_L2_PO,
 --                      CAST(A.FCE_DEDUCTION AS varchar) AS FCE_DEDUCTION,
 --                      CAST(A.AM_TTL_PO AS varchar) AS AM_TTL_PO,
---                      -- CAST(A.[SPIFF_DEDUCTION] AS varchar) [SPIFF_DEDUCTION],
 --                      CAST(A.[CPAS_SPIFF_PO] AS varchar) [CPAS_SPIFF_PO],
 --                      CAST(A.IMPLANT_SPIFF_PO AS VARCHAR) [IMPLANT_SPIFF_PO],
+--                      CAST(A.REVENUE_SPIFF_PO AS VARCHAR) [REVENUE_SPIFF_PO],
 --                      --CAST(A.AM_TTL_PO_QTD as varchar) as AM_TTL_PO_QTD,
 --                      CAST(A.PO_FREQ AS varchar) AS PO_FREQ,
 --                      CAST(A.GUR_AMT AS varchar) AS GUR_AMT,
@@ -263,9 +278,6 @@ ORDER BY
 --                                    O.TM_RATE
 --                      ) AS B ON a.REP_EMAIL = b.SALES_CREDIT_TM
 --                      AND a.YYYYMM = b.CLOSE_YYYYMM
---                      /***** USE FOR INSERTING INFO FOR SPECIFIC PEOPLE *****/
---                      -- WHERE
---                      --        A.REP_EMAIL IN ('jclemmons@cvrx.com', 'mjones@cvrx.com')
 --        ) P UNPIVOT (
 --               [VALUE] FOR [CATEGORY] IN (
 --                      SALES,
@@ -275,9 +287,9 @@ ORDER BY
 --                      AM_L2_PO,
 --                      FCE_DEDUCTION,
 --                      AM_TTL_PO,
---                      -- [SPIFF_DEDUCTION],
 --                      [CPAS_SPIFF_PO],
---                      [IMPLANT_SPIFF_PO], 
+--                      [IMPLANT_SPIFF_PO],
+--                      [REVENUE_SPIFF_PO],
 --                      --PO_FREQ, 
 --                      GUR_AMT,
 --                      ADJUSTMENTS,
