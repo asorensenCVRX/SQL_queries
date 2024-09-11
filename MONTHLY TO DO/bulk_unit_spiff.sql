@@ -1,0 +1,28 @@
+DECLARE @YYYYMM NVARCHAR(7) = '2024_08' 
+-- INSERT INTO
+--     tblCPAS_PO
+SELECT
+    OPP_ID,
+    NULL AS CASENUMBER,
+    SALES_CREDIT_REP_EMAIL AS EMAIL,
+    CASE
+        WHEN SALES_CREDIT_REP_EMAIL = 'ycruea@cvrx.com' THEN 'FCE'
+        ELSE 'REP'
+    END AS [ROLE],
+    SPIFF_PO AS PO,
+    NULL AS PO_RECOUP,
+    @YYYYMM AS SPIF_PO_YYYYMM,
+    NULL AS NOTES,
+    'BULK' AS SPIF_TYPE
+FROM
+    qry_COMP_BULK_UNIT_SPIFF
+WHERE
+    OPP_ID NOT IN (
+        SELECT
+            OPP_ID
+        FROM
+            tblCPAS_PO
+        WHERE
+            SPIF_TYPE = 'BULK'
+    )
+    AND CLOSE_YYYYMM = @YYYYMM
