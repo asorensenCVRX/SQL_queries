@@ -54,6 +54,9 @@ FROM
 WHERE
     OPP_COUNTRY = 'US'
     AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
-    AND CLOSE_YYYYQQ IN ('2024_Q3', '2024_Q4')
+    AND (
+        CLOSE_YYYYQQ = '2024_Q4'
+        OR CLOSE_YYYYMM = '2024_09'
+    )
     AND CLOSE_YYYYMM <> FORMAT(GETDATE(), 'yyyy_MM')
     AND REVENUE_UNITS >= 3
