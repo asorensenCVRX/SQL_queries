@@ -51,7 +51,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     )
                     OR o.SALES_CREDIT_REP_EMAIL IN (
                         'ashapiro@cvrx.com',
@@ -77,7 +78,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     )
                     OR o.OPP_OWNER_EMAIL IN (
                         'ashapiro@cvrx.com',
@@ -103,7 +105,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     )
                     OR a.REP_EMAIL IN (
                         'ashapiro@cvrx.com',
@@ -129,7 +132,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     )
                     OR r.REP_EMAIL IN (
                         'ashapiro@cvrx.com',
@@ -155,7 +159,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     )
                 ) THEN 1
                 ELSE 0
@@ -185,7 +190,8 @@ FROM
                     'tkirk@cvrx.com',
                     'tbarker@cvrx.com',
                     'tvaccaro@cvrx.com',
-                    'wsteinhoff@cvrx.com'
+                    'wsteinhoff@cvrx.com',
+                    'ycruea@cvrx.com'
                 ) THEN a.REP_EMAIL
                 WHEN O.ACT_OWNER_EMAIL IN (
                     'ashapiro@cvrx.com',
@@ -211,7 +217,8 @@ FROM
                     'tkirk@cvrx.com',
                     'tbarker@cvrx.com',
                     'tvaccaro@cvrx.com',
-                    'wsteinhoff@cvrx.com'
+                    'wsteinhoff@cvrx.com',
+                    'ycruea@cvrx.com'
                 ) THEN O.ACT_OWNER_EMAIL
                 WHEN o.SALES_CREDIT_REP_EMAIL IN (
                     'ashapiro@cvrx.com',
@@ -237,7 +244,8 @@ FROM
                     'tkirk@cvrx.com',
                     'tbarker@cvrx.com',
                     'tvaccaro@cvrx.com',
-                    'wsteinhoff@cvrx.com'
+                    'wsteinhoff@cvrx.com',
+                    'ycruea@cvrx.com'
                 ) THEN o.SALES_CREDIT_REP_EMAIL
                 WHEN o.OPP_OWNER_EMAIL IN (
                     'ashapiro@cvrx.com',
@@ -263,7 +271,8 @@ FROM
                     'tkirk@cvrx.com',
                     'tbarker@cvrx.com',
                     'tvaccaro@cvrx.com',
-                    'wsteinhoff@cvrx.com'
+                    'wsteinhoff@cvrx.com',
+                    'ycruea@cvrx.com'
                 ) THEN o.OPP_OWNER_EMAIL
                 ELSE NULL
             END AS [SPIFF_CREDIT_EMAIL],
@@ -303,7 +312,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     ) THEN a.REP_EMAIL
                     WHEN O.ACT_OWNER_EMAIL IN (
                         'ashapiro@cvrx.com',
@@ -329,7 +339,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     ) THEN O.ACT_OWNER_EMAIL
                     WHEN o.SALES_CREDIT_REP_EMAIL IN (
                         'ashapiro@cvrx.com',
@@ -355,7 +366,8 @@ FROM
                         'tkirk@cvrx.com',
                         'tbarker@cvrx.com',
                         'tvaccaro@cvrx.com',
-                        'wsteinhoff@cvrx.com'
+                        'wsteinhoff@cvrx.com',
+                        'ycruea@cvrx.com'
                     ) THEN o.SALES_CREDIT_REP_EMAIL
                     ELSE NULL
                 END
@@ -394,7 +406,10 @@ FROM
         FROM
             qryroster R
         WHERE
-            R.role = 'REP'
+            (
+                R.role = 'REP'
+                OR R.REP_EMAIL = 'ycrea@cvrx.com'
+            )
             AND r.[islatest?] = 1
             AND r.rep_Email IN (
                 'ashapiro@cvrx.com',
@@ -420,7 +435,8 @@ FROM
                 'tkirk@cvrx.com',
                 'tbarker@cvrx.com',
                 'tvaccaro@cvrx.com',
-                'wsteinhoff@cvrx.com'
+                'wsteinhoff@cvrx.com',
+                'ycruea@cvrx.com'
             )
     ) A
 WHERE
