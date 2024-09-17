@@ -22,6 +22,7 @@ SELECT
         ),
         O.AM_FOR_CREDIT_EMAIL
     ) AS SALES_CREDIT_REP_EMAIL,
+    R.ROLE,
     INDICATION_FOR_USE__C,
     REASON_FOR_IMPLANT__C,
     ISIMPL,
@@ -51,6 +52,18 @@ FROM
     LEFT JOIN tblActSplits splits ON O.ACT_ID = splits.ACT_ID
     AND CLOSE_YYYYMM BETWEEN splits.YYYYMM_ST
     AND splits.YYYYMM_END
+    LEFT JOIN qryRoster R ON ISNULL(
+        ISNULL(
+            splits.REP_EMAIL,
+            ISNULL(
+                AO.EMAIL,
+                O.SALES_CREDIT_REP_EMAIL
+            )
+        ),
+        O.AM_FOR_CREDIT_EMAIL
+    ) = R.REP_EMAIL
+    AND O.CLOSE_YYYYMM BETWEEN R.ACTIVE_YYYYMM
+    AND ISNULL(R.DOT_YYYYMM, '2099_12')
 WHERE
     OPP_COUNTRY = 'US'
     AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
@@ -59,4 +72,4 @@ WHERE
         OR CLOSE_YYYYMM = '2024_09'
     )
     AND CLOSE_YYYYMM <> FORMAT(GETDATE(), 'yyyy_MM')
-    AND REVENUE_UNITS >= 3
+    AND REVENUE_UNITS >= 3;
