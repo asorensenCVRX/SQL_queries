@@ -1,5 +1,5 @@
 DECLARE @SUBMIT_YYYYMM NVARCHAR(7) = '2024_08',
-@PO_YYYYMM NVARCHAR(7) = '2024_08'
+@PO_YYYYMM NVARCHAR(7) = '2024_08' 
 -- INSERT INTO
 --        tblCPAS_PO
 SELECT
@@ -17,7 +17,8 @@ FROM
                      --    TOTALOPPORTUNITYQUANTITY, 
                      @PO_YYYYMM AS PO_YYYYMM,
                      -- TotalCases,
-                     NULL AS notes --,[isEligibleForPaymentThisPeriod?]
+                     NULL AS notes,
+                     'CPAS' AS SPIF_TYPE --,[isEligibleForPaymentThisPeriod?]
               FROM
                      [dbo].[qry_COMP_CPAS_SPIF]
               WHERE
@@ -37,7 +38,8 @@ FROM
                      --    TOTALOPPORTUNITYQUANTITY, 
                      @PO_YYYYMM AS PO_YYYYMM,
                      -- TotalCases,
-                     NULL AS notes
+                     NULL AS notes,
+                     'CPAS' AS SPIF_TYPE
               FROM
                      [dbo].[qry_COMP_CPAS_SPIF]
               WHERE
