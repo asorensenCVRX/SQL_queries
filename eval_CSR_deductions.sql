@@ -37,4 +37,6 @@ FROM
             A.TGT_PO > 0
     ) AS A
 WHERE
-    CLOSE_YYYYMM = '2024_08' -- AND PAID_TO_EMAIL = 'ldasilvacampos@cvrx.com'
+    CLOSE_YYYYMM = '2024_08'
+    /***** INTEGRITY CHECK *******/
+    -- AND DEDUCTED_FROM_EMAIL = PAID_TO_EMAIL

@@ -16,7 +16,7 @@ FROM
             OPP_OWNER_EMAIL,
             /* first, bring in the emails on the splits table. If those are null, bring in the email from tblAlign_Opp.
              If that's null, bring in the sales_credit_rep_email from qryOpps.
-             Finally, if that's null, bring in the opp_owner from qryOpps. */
+             Finally, if that's null, bring in the AM_FOR_CREDIT_EMAIL from qryOpps. */
             ISNULL(
                 ISNULL(
                     splits.REP_EMAIL,
@@ -25,7 +25,7 @@ FROM
                         O.SALES_CREDIT_REP_EMAIL
                     )
                 ),
-                O.OPP_OWNER_EMAIL
+                O.AM_FOR_CREDIT_EMAIL
             ) AS SALES_CREDIT_REP_EMAIL,
             INDICATION_FOR_USE__C,
             REASON_FOR_IMPLANT__C,
@@ -73,4 +73,3 @@ WHERE
         CLOSE_YYYYMM = @YYYYMM
         OR IMPLANTED_YYYYMM = @YYYYMM
     )
-    -- AND SALES_CREDIT_REP_EMAIL = 'jelinburg@cvrx.com'
