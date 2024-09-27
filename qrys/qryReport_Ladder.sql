@@ -5,6 +5,8 @@ SELECT
     LNAME_REP,
     NAME_REP,
     DOH,
+    DOT,
+    [STATUS],
     ROLE,
     TERRITORY_ID,
     TERR_NM,
@@ -37,7 +39,7 @@ FROM
     qryRoster
     LEFT JOIN tblRates_AM ON qryRoster.REP_EMAIL = tblRates_AM.EID
 WHERE
-    [STATUS] = 'ACTIVE'
+    [isLATEST?] = 1
 UNION
 SELECT
     EMP_EMAIL,
@@ -45,6 +47,8 @@ SELECT
     NULL,
     NAME,
     NULL,
+    NULL,
+    UPPER(STATUS) AS STATUS,
     CASE
         WHEN EMP_EMAIL IN (
             'jheimsoth@cvrx.com',
