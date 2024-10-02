@@ -47,6 +47,7 @@ FROM
                 WHEN splits.SPLIT IS NOT NULL THEN SALES * SPLIT
                 ELSE SALES
             END AS SALES,
+            ASP,
             T.EMAIL AS FCE_PO_EMAIL,
             T.PO_PER,
             T.[PO_%]
@@ -63,6 +64,9 @@ FROM
                 WHEN T.[TYPE] = 'ACCT' THEN O.ACT_ID
                 WHEN T.[TYPE] = 'DOC' THEN O.PHYSICIAN_ID
             END = T.OBJ_ID
+            AND O.CLOSE_YYYYMM BETWEEN T.YYYYMM_START
+            AND T.YYYYMM_END
+            AND O.ISIMPL = 1
         WHERE
             OPP_STATUS = 'CLOSED'
             AND SHIPPINGCOUNTRYCODE = 'US'
