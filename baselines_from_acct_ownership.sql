@@ -1,10 +1,10 @@
-/* Checks if there are any Tier 4 reps who have accounts with 2023 revenue. 
- If there is 2023 revenue, these reps should be at least tier 3. */
 SELECT
     A.ID AS ACT_ID,
     A.[NAME] AS ACT_NAME,
+    A.SHIPPINGSTATECODE,
     U.NAME AS OWNER_NAME,
     U.EMAIL AS OWNER_EMAIL,
+    RL.REGION_ID,
     RL.TM_EMAIL,
     RL.RM_EMAIL,
     RL.AD_EMAIL,
@@ -73,18 +73,6 @@ FROM
         WHERE
             T.RN = 1
     ) AO ON A.ID = AO.ACT_ID
-    LEFT JOIN qryReport_Ladder RL ON U.NAME = RL.NAME_REP -- WHERE
-    --     A.ID IN (
-    --         SELECT
-    --             DISTINCT act_id
-    --         FROM
-    --             qryOpps
-    --         WHERE
-    --             CLOSE_YYYY = 2023
-    --         GROUP BY
-    --             ACT_ID
-    --         HAVING
-    --             sum(sales) > 0
-    --     )
+    LEFT JOIN qryReport_Ladder RL ON U.NAME = RL.NAME_REP
 ORDER BY
     4;
