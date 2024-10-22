@@ -1,9 +1,11 @@
+-- CREATE VIEW qryRates_AM AS
 SELECT
     A.TERR_ID,
     A.EID,
     A.[isTM?],
     A.TM_EID,
     A.Tier,
+    A.QUOTA_TIER,
     CAST([L1A] AS FLOAT) AS L1A,
     CAST([L1B] AS FLOAT) AS L1B,
     CAST([L2] AS FLOAT) AS L2,
@@ -37,10 +39,9 @@ WHERE
             EID
         FROM
             tblRates_AM_EX
-    )
-UNION
-ALL
-SELECT
-    *
-FROM
-    tblrates_AM_EX;
+    ) -- UNION
+    -- ALL
+    -- SELECT
+    --     *
+    -- FROM
+    --     tblrates_AM_EX;

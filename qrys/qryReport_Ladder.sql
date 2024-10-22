@@ -7,7 +7,10 @@ SELECT
     DOH,
     DOT,
     [STATUS],
-    ROLE,
+    CASE
+        WHEN tblRates_AM.[isTM?] = 1 THEN 'TM'
+        ELSE ROLE
+    END AS ROLE,
     TERRITORY_ID,
     TERR_NM,
     REGION_ID,
@@ -40,11 +43,22 @@ FROM
     LEFT JOIN tblRates_AM ON qryRoster.REP_EMAIL = tblRates_AM.EID
 WHERE
     [isLATEST?] = 1
+    AND REP_EMAIL NOT IN (
+        SELECT
+            EMP_EMAIL
+        FROM
+            qryRoster_RM
+    )
+    AND ROLE <> 'MDR'
 UNION
 SELECT
     EMP_EMAIL,
     FNAME,
-    NULL,
+    SUBSTRING(
+        NAME,
+        CHARINDEX(' ', NAME) + 1,
+        LEN(NAME) - CHARINDEX(' ', NAME)
+    ) AS LNAME_REP,
     NAME,
     NULL,
     NULL,
