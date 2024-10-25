@@ -1,6 +1,7 @@
 /****************************** 
  THIS IS THE DETAIL SUBQUERY START
  *******************************/
+--NEED TO REDUCE BASELINES (33% FOR TIER 1 AND 2, 50% FOR TIER 3, NO CHANGE FOR TIER 4)
 SELECT
     [SALES_CREDIT_REP_EMAIL],
     [isSale?],
@@ -42,16 +43,19 @@ SELECT
     [QTD_SALES],
     [QTD_SALES - SALES],
     [BL],
+    Q4BL,
     [QUOTA],
+    QUOTA_TIER,
     isnull([AM_L1_REV], 0) AS AM_L1_REV,
     isnull([AM_L2_REV], 0) AS AM_L2_REV,
     [SPIFF_DEDUCTION],
     [PHYSICIAN],
     [PHYSICIAN_ID],
     isnull(M.AM_L1_REV, 0) * 0.15 AS AM_L1_PO,
-    /* L2A = all L2 sales multiplied by 0.15 */
     CASE
+        /* if QTD_IMPLANTS < 3 then return L2 rev * 0.15 */
         WHEN QTD_IMPLANTS < 3 THEN isnull(M.AM_L2_REV, 0) * 0.15
+        /* once QTD_IMPLANTS hits 3, true-up past L2_rev so all L2 rev from dollar 1 is paid at 0.25 */
         WHEN QTD_IMPLANTS = 3 THEN (
             SUM(isnull(M.AM_L2_REV, 0) * 0.25) OVER (
                 PARTITION BY SALES_CREDIT_REP_EMAIL
@@ -65,6 +69,7 @@ SELECT
                     AND 1 PRECEDING
             )
         ) + (M.AM_L2_REV * 0.25)
+        /* when QTD_IMPLANTS > 3, return L2 rev * 0.25 */
         WHEN QTD_IMPLANTS > 3 THEN isnull(M.AM_L2_REV, 0) * 0.25
     END AS L2_PO,
     MAX(QTD_IMPLANTS) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS TOTAL_Q0_IMPLANTS
@@ -100,43 +105,45 @@ FROM
             B.QTD_SALES,
             ISNULL(QTD_SALES, 0) - ISNULL(SALES, 0) [QTD_SALES - SALES],
             u.BL,
+            u.Q4BL,
             u.QUOTA,
             CASE
                 /*Solve: if this sales is negative and we're still below baseline then sales  */
                 WHEN ISNULL(sales, 0) < 0
-                AND ISNULL(QTD_SALES, 0) <= u.BL THEN SALES
+                AND ISNULL(QTD_SALES, 0) <= u.Q4BL THEN SALES
                 /*Solve: if were not currently above baseline then all Sales are in L1 still */
-                WHEN ISNULL(QTD_SALES, 0) <= U.BL THEN ISNULL(sales, 0)
-                /*Solve:   if we were NOT already above BL then return a portion/all of this sale up to BL*/
-                WHEN (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0)) <= U.BL THEN U.BL - (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0))
+                WHEN ISNULL(QTD_SALES, 0) <= U.Q4BL THEN ISNULL(sales, 0)
+                /*Solve:   if we were NOT already above Q4BL then return a portion/all of this sale up to Q4BL*/
+                WHEN (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0)) <= U.Q4BL THEN U.Q4BL - (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0))
                 ELSE 0
             END AS AM_L1_REV,
             CASE
                 /*Solve: if this sales is negative and we're currently l2 and previously were in l2 then sales  */
                 WHEN ISNULL(sales, 0) < 0
-                AND ISNULL(QTD_SALES, 0) > u.[BL]
-                AND ISNULL(QTD_SALES, 0) - ISNULL(sales, 0) > u.[BL] THEN sales
+                AND ISNULL(QTD_SALES, 0) > u.[Q4BL]
+                AND ISNULL(QTD_SALES, 0) - ISNULL(sales, 0) > u.[Q4BL] THEN sales
                 /*Solve: if this sales is negative and we're no longer above baseline but we were before this line item then   */
                 WHEN ISNULL(sales, 0) < 0
-                AND ISNULL(QTD_SALES, 0) < u.[BL]
+                AND ISNULL(QTD_SALES, 0) < u.[Q4BL]
                 AND ISNULL(
                     QTD_SALES,
                     0
-                ) - ISNULL(sales, 0) > u.[BL] THEN (u.[bl] - ISNULL(QTD_SALES, 0)) + ISNULL(sales, 0)
-                /*Solve: if we're already passed quota before this record OR sales is still below BL at this line then 0 sales get passed. */
-                WHEN (ISNULL(QTD_SALES, 0)) <= u.[BL]
+                ) - ISNULL(sales, 0) > u.[Q4BL] THEN (u.[Q4BL] - ISNULL(QTD_SALES, 0)) + ISNULL(sales, 0)
+                /*Solve: if we're already passed quota before this record OR sales is still below Q4BL at this line then 0 sales get passed. */
+                WHEN (ISNULL(QTD_SALES, 0)) <= u.[Q4BL]
                 OR ISNULL(SALES, 0) = 0 THEN 0
                 /*Solve: if we were already at/passed Baseline then sales */
-                WHEN (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0)) > u.[bl]
-                AND ISNULL(QTD_SALES, 0) >= u.[BL] THEN sales
+                WHEN (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0)) > u.[Q4BL]
+                AND ISNULL(QTD_SALES, 0) >= u.[Q4BL] THEN sales
                 /*Solve: if we are now at/passed Baseline and currently less than quota then take the sales over the baseline */
-                WHEN ISNULL(QTD_SALES, 0) >= u.[BL] THEN ISNULL(QTD_SALES, 0) - u.[BL]
+                WHEN ISNULL(QTD_SALES, 0) >= u.[Q4BL] THEN ISNULL(QTD_SALES, 0) - u.[Q4BL]
                 ELSE NULL
             END [AM_L2_REV],
             d.L1A,
             d.L1B,
             d.L2,
             d.L3,
+            D.QUOTA_TIER,
             /*  ISNULL(CPAS.PO, 0) [SPIFF_DEDUCTION], */
             0.00 AS [SPIFF_DEDUCTION],
             PHYSICIAN,
@@ -311,6 +318,7 @@ FROM
                     YYYYQQ,
                     EID,
                     sum(BASELINE) AS BL,
+                    SUM(Q4BL) AS Q4BL,
                     SUM(QUOTA) AS QUOTA,
                     SUM(BASELINE) * 0.75 AS [75xBL]
                 FROM
@@ -337,8 +345,6 @@ FROM
             ) CPAS ON B.OPP_ID = CPAS.OPPORTUNITY__C
             AND b.SALES_CREDIT_REP_EMAIL = cpas.EMAIL
     ) AS M
-WHERE
-    SALES_CREDIT_REP_EMAIL = 'dharper@cvrx.com'
 ORDER BY
     1,
     7
