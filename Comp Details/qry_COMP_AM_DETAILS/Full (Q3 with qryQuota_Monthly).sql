@@ -358,6 +358,7 @@ FROM
                                     [DT] = CAST(DATEADD(mm, - 1, GETDATE()) AS DATE)
                             )
                             AND CLOSE_YYYY >= '2022'
+                            AND CLOSE_YYYYQQ < '2024_Q4'
                             AND OPP_COUNTRY = 'US'
                             AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
                             AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
