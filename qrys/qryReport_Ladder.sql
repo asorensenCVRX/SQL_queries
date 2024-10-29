@@ -55,13 +55,13 @@ SELECT
     EMP_EMAIL,
     FNAME,
     SUBSTRING(
-        NAME,
-        CHARINDEX(' ', NAME) + 1,
-        LEN(NAME) - CHARINDEX(' ', NAME)
+        RM.NAME,
+        CHARINDEX(' ', RM.NAME) + 1,
+        LEN(RM.NAME) - CHARINDEX(' ', RM.NAME)
     ) AS LNAME_REP,
-    NAME,
-    NULL,
-    NULL,
+    RM.NAME,
+    E.DOH,
+    CAST(E.DOT AS DATE) AS DOT,
     UPPER(STATUS) AS STATUS,
     CASE
         WHEN EMP_EMAIL IN (
@@ -91,4 +91,5 @@ SELECT
         WHEN EMP_EMAIL = 'kdenton@cvrx.com' THEN 'pknight@cvrx.com'
     END
 FROM
-    qryRoster_RM;
+    qryRoster_RM RM
+    LEFT JOIN tblEmployee E ON E.[WORK E-MAIL] = RM.EMP_EMAIL
