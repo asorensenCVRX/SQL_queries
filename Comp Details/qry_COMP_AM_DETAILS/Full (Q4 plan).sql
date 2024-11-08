@@ -357,3 +357,7 @@ FROM
             ) CPAS ON B.OPP_ID = CPAS.OPPORTUNITY__C
             AND b.SALES_CREDIT_REP_EMAIL = cpas.EMAIL
     ) AS M
+    /* BAROSTIM RETURN; approved by RJ to not affect comp */
+WHERE
+    OPP_ID <> '006UY00000EZ9I5YAL'
+    OR OPP_ID IS NULL
