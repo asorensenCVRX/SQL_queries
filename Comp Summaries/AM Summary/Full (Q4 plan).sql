@@ -14,7 +14,6 @@ SELECT
     A.AM_L1_PO,
     A.AM_L2_PO,
     A.FCE_DEDUCTION,
-    a.SPIFF_DEDUCTION,
     ISNULL(SP.PO, 0) [CPAS_SPIFF_PO],
     ISNULL(SP2.PO, 0) [IMPLANT_SPIFF_PO],
     ISNULL(A.AM_TTL_PO, 0) [AM_TTL_PO],
@@ -68,8 +67,8 @@ FROM
     (
         SELECT
             S.*,
-            X.FCE_DEDUCTION,
-            ISNULL([AM_L1_PO], 0) + ISNULL([AM_L2_PO], 0) - ISNULL(FCE_DEDUCTION, 0) - ISNULL(SPIFF_DEDUCTION, 0) AM_TTL_PO
+            isnull(X.FCE_DEDUCTION, 0) FCE_DEDUCTION,
+            ISNULL([AM_L1_PO], 0) + ISNULL([AM_L2_PO], 0) - ISNULL(FCE_DEDUCTION, 0) AM_TTL_PO
         FROM
             (
                 SELECT
@@ -83,11 +82,10 @@ FROM
                     ISNULL(SUM([AM_L1_REV]), 0) [AM_L1_REV],
                     ISNULL(SUM([AM_L2_REV]), 0) [AM_L2_REV],
                     ISNULL(SUM([AM_L1_PO]), 0) [AM_L1_PO],
-                    ISNULL(SUM([AM_L2_PO]), 0) [AM_L2_PO],
-                    ISNULL(SUM(SPIFF_DEDUCTION), 0) AS [SPIFF_DEDUCTION],
+                    SUM(ISNULL([AM_L2_PO], 0)) [AM_L2_PO],
                     isnull(MAX(TOTAL_Q0_IMPLANTS), 0) AS Q0_IMPLANTS
                 FROM
-                    qry_COMP_AM_DETAIL AS T
+                    tmp_COMP_AM_DETAIL AS T
                 GROUP BY
                     [SALES_CREDIT_REP_EMAIL],
                     [NAME_REP],

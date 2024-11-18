@@ -1,6 +1,8 @@
-/****************************** 
- THIS IS THE DETAIL SUBQUERY START
- *******************************/
+IF OBJECT_ID(N'dbo.tmp_COMP_AM_DETAIL', N'U') IS NOT NULL DROP TABLE dbo.tmp_COMP_AM_DETAIL
+GO
+    /****************************** 
+     THIS IS THE DETAIL SUBQUERY START
+     *******************************/
 SELECT
     [SALES_CREDIT_REP_EMAIL],
     [isSale?],
@@ -50,7 +52,6 @@ SELECT
     isnull([AM_L2_REV], 0) AS AM_L2_REV,
     0.15 AS L1,
     0.25 AS L2,
-    [SPIFF_DEDUCTION],
     [PHYSICIAN],
     [PHYSICIAN_ID],
     CAST(isnull(M.AM_L1_REV, 0) * 0.15 AS MONEY) AS AM_L1_PO,
@@ -106,6 +107,9 @@ SELECT
         PARTITION BY SALES_CREDIT_REP_EMAIL,
         CLOSE_YYYYQQ
     ) AS TOTAL_Q0_IMPLANTS
+    /***********/
+    INTO tmp_COMP_AM_DETAIL
+    /**********/
 FROM
     (
         SELECT
@@ -177,8 +181,6 @@ FROM
             d.L2,
             d.L3,
             D.QUOTA_TIER,
-            /*  ISNULL(CPAS.PO, 0) [SPIFF_DEDUCTION], */
-            0.00 AS [SPIFF_DEDUCTION],
             PHYSICIAN,
             PHYSICIAN_ID
         FROM
