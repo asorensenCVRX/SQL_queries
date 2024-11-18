@@ -54,50 +54,53 @@ SELECT
     [PHYSICIAN],
     [PHYSICIAN_ID],
     CAST(isnull(M.AM_L1_REV, 0) * 0.15 AS MONEY) AS AM_L1_PO,
-    CAST(
-        CASE
-            /* if QTD_IMPLANTS < 3 then return L2 rev * 0.15 */
-            WHEN QTD_IMPLANTS < 3 THEN isnull(M.AM_L2_REV, 0) * 0.15
-            /* once QTD_IMPLANTS hits 3, true-up past L2_rev so all L2 rev from dollar 1 is paid at 0.25 */
-            WHEN (
-                (
-                    QTD_IMPLANTS = 3
-                    AND LAG(QTD_IMPLANTS) OVER (
+    isnull(
+        CAST(
+            CASE
+                /* if QTD_IMPLANTS < 3 then return L2 rev * 0.15 */
+                WHEN QTD_IMPLANTS < 3 THEN isnull(M.AM_L2_REV, 0) * 0.15
+                /* once QTD_IMPLANTS hits 3, true-up past L2_rev so all L2 rev from dollar 1 is paid at 0.25 */
+                WHEN (
+                    (
+                        QTD_IMPLANTS = 3
+                        AND LAG(QTD_IMPLANTS) OVER (
+                            PARTITION BY SALES_CREDIT_REP_EMAIL
+                            ORDER BY
+                                CLOSEDATE
+                        ) IN (2, 2.5)
+                    )
+                    OR (
+                        QTD_IMPLANTS = 3.5
+                        AND LAG(QTD_IMPLANTS) OVER (
+                            PARTITION BY SALES_CREDIT_REP_EMAIL
+                            ORDER BY
+                                CLOSEDATE
+                        ) = 2.5
+                    )
+                ) THEN (
+                    /* take all L2 revenue for the quarter (not including the current sale) and multiply by 0.25 */
+                    SUM(isnull(M.AM_L2_REV, 0) * 0.25) OVER (
                         PARTITION BY SALES_CREDIT_REP_EMAIL
                         ORDER BY
-                            CLOSEDATE
-                    ) IN (2, 2.5)
-                )
-                OR (
-                    QTD_IMPLANTS = 3.5
-                    AND LAG(QTD_IMPLANTS) OVER (
+                            CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
+                            AND 1 PRECEDING
+                    )
+                    /* take all L2 revenue for the quarter (not including the current sale) and multiply by 0.15, then subtract this number 
+                     (the amount being subtracted is the amount already paid) */
+                    - SUM(isnull(M.AM_L2_REV, 0) * 0.15) OVER (
                         PARTITION BY SALES_CREDIT_REP_EMAIL
                         ORDER BY
-                            CLOSEDATE
-                    ) = 2.5
+                            CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
+                            AND 1 PRECEDING
+                    )
                 )
-            ) THEN (
-                /* take all L2 revenue for the quarter (not including the current sale) and multiply by 0.25 */
-                SUM(isnull(M.AM_L2_REV, 0) * 0.25) OVER (
-                    PARTITION BY SALES_CREDIT_REP_EMAIL
-                    ORDER BY
-                        CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
-                        AND 1 PRECEDING
-                )
-                /* take all L2 revenue for the quarter (not including the current sale) and multiply by 0.15, then subtract this number 
-                 (the amount being subtracted is the amount already paid) */
-                - SUM(isnull(M.AM_L2_REV, 0) * 0.15) OVER (
-                    PARTITION BY SALES_CREDIT_REP_EMAIL
-                    ORDER BY
-                        CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
-                        AND 1 PRECEDING
-                )
-            )
-            /* add in the PO for the current sale at 0.25 */
-            + (M.AM_L2_REV * 0.25)
-            /* when QTD_IMPLANTS > 3, return L2 rev * 0.25 */
-            ELSE isnull(M.AM_L2_REV, 0) * 0.25
-        END AS MONEY
+                /* add in the PO for the current sale at 0.25 */
+                + (M.AM_L2_REV * 0.25)
+                /* when QTD_IMPLANTS > 3, return L2 rev * 0.25 */
+                ELSE isnull(M.AM_L2_REV, 0) * 0.25
+            END AS MONEY
+        ),
+        0
     ) AS AM_L2_PO,
     MAX(QTD_IMPLANTS) OVER (
         PARTITION BY SALES_CREDIT_REP_EMAIL,
@@ -377,3 +380,5 @@ FROM
             ) CPAS ON B.OPP_ID = CPAS.OPPORTUNITY__C
             AND b.SALES_CREDIT_REP_EMAIL = cpas.EMAIL
     ) AS M
+WHERE
+    left(CLOSE_YYYYMM, 4) = '2024'
