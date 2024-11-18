@@ -1,4 +1,7 @@
-DECLARE @YYYY_MM AS NVARCHAR(7) = '2024_08'
+/* if a CPAS payout shows up on this table, it means the account it is credited to
+ has an active split. Check all cases in this table to make sure POs are properly split
+ according to account splits. */
+DECLARE @YYYY_MM AS NVARCHAR(7) = '2024_10'
 SELECT
     CASENUMBER,
     REP_PO_YYYYMM,
@@ -48,7 +51,7 @@ FROM
                     tblActSplits
             ) A ON C.ACT_ID = A.ACT_ID
         WHERE
-            REP_PO_YYYYMM = @YYYY_MM
+            REP_PO_YYYYMM = '2024_10'
     ) AS A
 WHERE
     YYYYMM_END >= FORMAT(
