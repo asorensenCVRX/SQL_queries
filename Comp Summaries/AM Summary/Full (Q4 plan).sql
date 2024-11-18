@@ -1,15 +1,3 @@
-/** 
- TO DO LIST 
- !! FCE DEDUCTIONS !! 
- -- account for Splits (no splits for march )  
- -- account for MDR Fees... do this in March for Feb.. once MDR is fully built out 
- 
- 
- CAUTION: 
- -- QUARTERIZE THIS >> make sure that when AdventHealth Daytona and ORlando hit their $840K that the FCE Tax isnt taken from Clemmons/Wyatt retroactively.
- Remove Prior Paid witihn Period from those on Guarantee
- 
- **/
 -- IF OBJECT_ID(N'dbo.tmpAM_PO', N'U') IS NOT NULL DROP TABLE dbo.tmpAM_PO
 -- GO
 SELECT
@@ -71,7 +59,8 @@ SELECT
             ELSE ISNULL(A.AM_TTL_PO, 0) + ISNULL(D.AMT, 0) + ISNULL(SP.PO, 0)
         END,
         0
-    ) + ISNULL(SP2.PO, 0) AS [PO_AMT]
+    ) + ISNULL(SP2.PO, 0) AS [PO_AMT],
+    Q0_IMPLANTS
     /***** COMMENT OUT THIS *****/
     -- INTO dbo.tmpAM_PO
     /**********/
@@ -95,8 +84,8 @@ FROM
                     ISNULL(SUM([AM_L2_REV]), 0) [AM_L2_REV],
                     ISNULL(SUM([AM_L1_PO]), 0) [AM_L1_PO],
                     ISNULL(SUM([AM_L2_PO]), 0) [AM_L2_PO],
-                    ISNULL(SUM(ISIMPL), 0) AS QTD_IMPLANTS,
-                    ISNULL(SUM(SPIFF_DEDUCTION), 0) AS [SPIFF_DEDUCTION]
+                    ISNULL(SUM(SPIFF_DEDUCTION), 0) AS [SPIFF_DEDUCTION],
+                    isnull(MAX(TOTAL_Q0_IMPLANTS), 0) AS Q0_IMPLANTS
                 FROM
                     qry_COMP_AM_DETAIL AS T
                 GROUP BY
