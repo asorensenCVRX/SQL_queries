@@ -41,8 +41,8 @@ SELECT
     END AS [GUR_ADJ],
     CASE
         WHEN PO_FREQ = 'M'
-        AND B.PO_AMT > ISNULL(RM_TTL_PO + SP.PO, 0) THEN B.PO_AMT
-        ELSE A.RM_TTL_PO + SP.PO
+        AND B.PO_AMT > ISNULL(RM_TTL_PO + ISNULL(SP.PO, 0), 0) THEN B.PO_AMT
+        ELSE A.RM_TTL_PO + ISNULL(SP.PO, 0)
     END AS [PO_AMT],
     g.L1,
     g.L2,
@@ -102,7 +102,7 @@ FROM
                             SUM(A.RM_L1_REV) [RM_L1_REV],
                             SUM(A.RM_L2_REV) [RM_L2_REV],
                             SUM(A.RM_L3_REV) [RM_L3_REV],
-                            SUM(A.RM_L1_PO) + SUM(A.RM_L2_PO) + SUM(A.RM_L3_PO) + ISNULL(SUM(0), 0) AS [RM_TTL_PO]
+                            SUM(A.RM_L1_PO) + SUM(A.RM_L2_PO) + SUM(A.RM_L3_PO) AS [RM_TTL_PO]
                         FROM
                             qry_COMP_RM_DETAIL AS A
                         GROUP BY
