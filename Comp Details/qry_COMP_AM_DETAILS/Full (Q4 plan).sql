@@ -16,15 +16,8 @@ SELECT
     [ACT_ID],
     [SPLIT],
     [SPLIT_ACT],
-    /* opp 006UY00000DP1uHYAT delayed due to Hurricane Helena, approval from RJ to pay as part of September comp */
-    CASE
-        WHEN OPP_ID IN ('006UY00000DP1uHYAT') THEN '2024_09'
-        ELSE [CLOSE_YYYYMM]
-    END AS CLOSE_YYYYMM,
-    CASE
-        WHEN OPP_ID IN ('006UY00000DP1uHYAT') THEN '2024_Q3'
-        ELSE [CLOSE_YYYYQQ]
-    END AS [CLOSE_YYYYQQ],
+    [CLOSE_YYYYMM],
+    [CLOSE_YYYYQQ],
     INDICATION_FOR_USE__C,
     REASON_FOR_IMPLANT__C,
     [ASP],
@@ -60,27 +53,52 @@ SELECT
     [SPIFF_DEDUCTION],
     [PHYSICIAN],
     [PHYSICIAN_ID],
-    isnull(M.AM_L1_REV, 0) * 0.15 AS AM_L1_PO,
-    CASE
-        /* if QTD_IMPLANTS < 3 then return L2 rev * 0.15 */
-        WHEN QTD_IMPLANTS < 3 THEN isnull(M.AM_L2_REV, 0) * 0.15
-        /* once QTD_IMPLANTS hits 3, true-up past L2_rev so all L2 rev from dollar 1 is paid at 0.25 */
-        WHEN QTD_IMPLANTS = 3 THEN (
-            SUM(isnull(M.AM_L2_REV, 0) * 0.25) OVER (
-                PARTITION BY SALES_CREDIT_REP_EMAIL
-                ORDER BY
-                    CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
-                    AND 1 PRECEDING
-            ) - SUM(isnull(M.AM_L2_REV, 0) * 0.15) OVER (
-                PARTITION BY SALES_CREDIT_REP_EMAIL
-                ORDER BY
-                    CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
-                    AND 1 PRECEDING
+    CAST(isnull(M.AM_L1_REV, 0) * 0.15 AS MONEY) AS AM_L1_PO,
+    CAST(
+        CASE
+            /* if QTD_IMPLANTS < 3 then return L2 rev * 0.15 */
+            WHEN QTD_IMPLANTS < 3 THEN isnull(M.AM_L2_REV, 0) * 0.15
+            /* once QTD_IMPLANTS hits 3, true-up past L2_rev so all L2 rev from dollar 1 is paid at 0.25 */
+            WHEN (
+                (
+                    QTD_IMPLANTS = 3
+                    AND LAG(QTD_IMPLANTS) OVER (
+                        PARTITION BY SALES_CREDIT_REP_EMAIL
+                        ORDER BY
+                            CLOSEDATE
+                    ) IN (2, 2.5)
+                )
+                OR (
+                    QTD_IMPLANTS = 3.5
+                    AND LAG(QTD_IMPLANTS) OVER (
+                        PARTITION BY SALES_CREDIT_REP_EMAIL
+                        ORDER BY
+                            CLOSEDATE
+                    ) = 2.5
+                )
+            ) THEN (
+                /* take all L2 revenue for the quarter (not including the current sale) and multiply by 0.25 */
+                SUM(isnull(M.AM_L2_REV, 0) * 0.25) OVER (
+                    PARTITION BY SALES_CREDIT_REP_EMAIL
+                    ORDER BY
+                        CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
+                        AND 1 PRECEDING
+                )
+                /* take all L2 revenue for the quarter (not including the current sale) and multiply by 0.15, then subtract this number 
+                 (the amount being subtracted is the amount already paid) */
+                - SUM(isnull(M.AM_L2_REV, 0) * 0.15) OVER (
+                    PARTITION BY SALES_CREDIT_REP_EMAIL
+                    ORDER BY
+                        CLOSEDATE ROWS BETWEEN UNBOUNDED PRECEDING
+                        AND 1 PRECEDING
+                )
             )
-        ) + (M.AM_L2_REV * 0.25)
-        /* when QTD_IMPLANTS > 3, return L2 rev * 0.25 */
-        WHEN QTD_IMPLANTS > 3 THEN isnull(M.AM_L2_REV, 0) * 0.25
-    END AS AM_L2_PO,
+            /* add in the PO for the current sale at 0.25 */
+            + (M.AM_L2_REV * 0.25)
+            /* when QTD_IMPLANTS > 3, return L2 rev * 0.25 */
+            ELSE isnull(M.AM_L2_REV, 0) * 0.25
+        END AS MONEY
+    ) AS AM_L2_PO,
     MAX(QTD_IMPLANTS) OVER (
         PARTITION BY SALES_CREDIT_REP_EMAIL,
         CLOSE_YYYYQQ
@@ -285,7 +303,7 @@ FROM
                                     A.NAME
                             ) AS QTD_SALES,
                             SUM(
-                                ISIMPL
+                                IMPLANT_UNITS * ISNULL(B.SPLIT, ISNULL(Z.SPLIT, 1))
                             ) OVER (
                                 PARTITION BY ISNULL(
                                     B.SALES_CREDIT_REP_EMAIL,
@@ -319,6 +337,8 @@ FROM
                             AND OPP_COUNTRY = 'US'
                             AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
                             AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
+                            /* opp 006UY00000DP1uHYAT delayed due to Hurricane Helena, approval from RJ to pay as part of September comp */
+                            AND A.OPP_ID <> '006UY00000DP1uHYAT'
                     ) AS T1 ON t0.REP_EMAIL = t1.SALES_CREDIT_REP_EMAIL
                     AND t0.YYYYMM = t1.CLOSE_YYYYMM
             ) AS B
@@ -357,7 +377,3 @@ FROM
             ) CPAS ON B.OPP_ID = CPAS.OPPORTUNITY__C
             AND b.SALES_CREDIT_REP_EMAIL = cpas.EMAIL
     ) AS M
-    /* BAROSTIM RETURN; approved by RJ to not affect comp */
-WHERE
-    OPP_ID <> '006UY00000EZ9I5YAL'
-    OR OPP_ID IS NULL
