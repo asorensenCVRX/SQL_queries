@@ -1,10 +1,10 @@
-DECLARE @TERMED_OWNER NVARCHAR(MAX) = 'ataylor@cvrx.com';
+DECLARE @TERMED_OWNER NVARCHAR(MAX) = 'jreedy@cvrx.com';
 
 
-DECLARE @TERM_DATE DATE = '2024-07-01';
+DECLARE @TERM_DATE DATE = '2024-12-31';
 
 
-DECLARE @NEW_OWNER NVARCHAR(MAX) = 'ahilovsky@cvrx.com';
+DECLARE @NEW_OWNER NVARCHAR(MAX) = 'jpind@cvrx.com';
 
 
 /* create a temporary dataset that can be referenced */
@@ -46,6 +46,7 @@ SELECT
 ;
 
 
+/* TABLE 1 */
 /* shows all accounts that used to belong to the termed rep and the account movements */
 SELECT
     *
@@ -54,6 +55,7 @@ FROM
 ;
 
 
+/* TABLE 2 */
 /* shows accounts that still need to be reassigned */
 SELECT
     *
@@ -70,17 +72,32 @@ WHERE
     );
 
 
+/* TABLE 3 */
 /* shows accounts where the termed owner has ownership past term date.
  For these accounts, you need to update the end_dt to the term date. */
+-- UPDATE
+--     tblAlign_Act
+-- SET
+--     END_DT = @TERM_DATE
 SELECT
     *
 FROM
-    #TEMPtblAlign_Act
+    tblAlign_Act
 WHERE
-    OWNER_EMAIL = @TERMED_OWNER
-    AND END_DT > @TERM_DATE;
+    EXISTS (
+        SELECT
+            1
+        FROM
+            #TEMPtblAlign_Act
+        WHERE
+            OWNER_EMAIL = @TERMED_OWNER
+            AND END_DT > @TERM_DATE
+            AND #TEMPtblAlign_Act.ACT_ID = tblAlign_Act.ACT_ID
+            AND #TEMPtblAlign_Act.OWNER_EMAIL = tblAlign_Act.OWNER_EMAIL
+    );
 
 
+/* TABLE 4 */
 /* use this to assign the account to a new owner */
 -- INSERT INTO
 --     tblAlign_Act
