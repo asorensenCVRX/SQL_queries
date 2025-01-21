@@ -4,40 +4,17 @@ SELECT
     FNAME_REP,
     LNAME_REP,
     NAME_REP,
-    DOH,
+    CAST(DOH AS DATE) AS DOH,
     DOT,
     [STATUS],
-    CASE
-        WHEN tblRates_AM.[isTM?] = 1 THEN 'TM'
-        ELSE ROLE
-    END AS ROLE,
+    ROLE,
     TERRITORY_ID,
     TERR_NM,
     REGION_ID,
-    REGION_NM,
+    LEFT(REGION_NM, CHARINDEX('(', REGION_NM) -2) AS REGION_NM,
+    REGION_NM AS REGION_NM_FULL,
     qryRoster.Tier,
-    qryRoster.[isTM?],
-    tblRates_AM.TM_EID AS TM_EMAIL,
-    CASE
-        WHEN RM_EMAIL IN (
-            'jgarner@cvrx.com',
-            'kdenton@cvrx.com',
-            'jhorky@cvrx.com',
-            'ccastillo@cvrx.com'
-        ) THEN RM_EMAIL
-        ELSE NULL
-    END AS RM_EMAIL,
-    CASE
-        WHEN RM_EMAIL NOT IN (
-            'jgarner@cvrx.com',
-            'kdenton@cvrx.com',
-            'jhorky@cvrx.com',
-            'ccastillo@cvrx.com'
-        ) THEN RM_EMAIL
-        WHEN RM_EMAIL = 'ccastillo@cvrx.com' THEN 'mbrown@cvrx.com'
-        WHEN RM_EMAIL = 'jgarner@cvrx.com' THEN 'jheimsoth@cvrx.com'
-        WHEN RM_EMAIL = 'kdenton@cvrx.com' THEN 'pknight@cvrx.com'
-    END AS AD_EMAIL
+    RM_EMAIL
 FROM
     qryRoster
     LEFT JOIN tblRates_AM ON qryRoster.REP_EMAIL = tblRates_AM.EID
@@ -60,36 +37,23 @@ SELECT
         LEN(RM.NAME) - CHARINDEX(' ', RM.NAME)
     ) AS LNAME_REP,
     RM.NAME,
-    E.DOH,
+    CAST(E.DOH AS DATE) AS DOH,
     CAST(E.DOT AS DATE) AS DOT,
     UPPER(STATUS) AS STATUS,
-    CASE
-        WHEN EMP_EMAIL IN (
-            'jheimsoth@cvrx.com',
-            'mbrown@cvrx.com',
-            'pknight@cvrx.com'
-        ) THEN 'AD_A'
-        WHEN EMP_EMAIL IN ('kryan@cvrx.com', 'jtsokanos@cvrx.com') THEN 'AD_B'
-        WHEN EMP_EMAIL IN (
-            'jgarner@cvrx.com',
-            'kdenton@cvrx.com',
-            'jhorky@cvrx.com',
-            'ccastillo@cvrx.com'
-        ) THEN 'RM'
-    END AS ROLE,
+    ROLE,
     NULL,
     NULL,
     TERRITORY_ID,
     REGION,
+    REGION + ' (' + UPPER(
+        SUBSTRING(
+            RM.NAME,
+            CHARINDEX(' ', RM.NAME) + 1,
+            LEN(RM.NAME) - CHARINDEX(' ', RM.NAME)
+        )
+    ) + ')',
     NULL,
-    NULL,
-    NULL,
-    NULL,
-    CASE
-        WHEN EMP_EMAIL = 'ccastillo@cvrx.com' THEN 'mbrown@cvrx.com'
-        WHEN EMP_EMAIL = 'jgarner@cvrx.com' THEN 'jheimsoth@cvrx.com'
-        WHEN EMP_EMAIL = 'kdenton@cvrx.com' THEN 'pknight@cvrx.com'
-    END
+    NULL
 FROM
     qryRoster_RM RM
     LEFT JOIN tblEmployee E ON E.[WORK E-MAIL] = RM.EMP_EMAIL
