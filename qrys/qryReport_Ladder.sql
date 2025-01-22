@@ -17,7 +17,6 @@ SELECT
     RM_EMAIL
 FROM
     qryRoster
-    LEFT JOIN tblRates_AM ON qryRoster.REP_EMAIL = tblRates_AM.EID
 WHERE
     [isLATEST?] = 1
     AND REP_EMAIL NOT IN (

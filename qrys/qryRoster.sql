@@ -1,7 +1,6 @@
 -- CREATE VIEW qryRoster AS
 SELECT
     A.ROLE,
-    z.[isTM?],
     A.TERRITORY_ID,
     ISNULL(B.TERRITORY, BB.REGION) AS TERRITORY,
     ISNULL(B.TERRITORY, BB.REGION) + ' (' + UPPER(D.LNAME) + ')' AS TERR_NM,
@@ -85,7 +84,7 @@ SELECT
         ELSE CAST(YEAR(A.END_DT) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(A.END_DT) AS VARCHAR), 2)
     END AS DOT_YYYYMM,
     E.LNAME AS LNAME_RM,
-    isnull(z.Tier, 'No Tier') [Tier],
+    z.TIER [Tier],
     f.[isTargetedCSR?],
     d.[isActivated],
     CASE
@@ -143,7 +142,7 @@ FROM
         GROUP BY
             EMP_EMAIL
     ) AS G ON A.EMP_EMAIL = G.EMP_EMAIL
-    LEFT JOIN tblRates_AM Z ON A.EMP_EMAIL = Z.EID
+    LEFT JOIN tblRates_TM Z ON A.EMP_EMAIL = Z.EID
     AND A.ROLE = 'REP'
     LEFT JOIN tblFCE_COMP F ON A.EMP_EMAIL = f.FCE_EMAIL
 WHERE
