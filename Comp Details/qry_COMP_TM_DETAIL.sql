@@ -1,7 +1,5 @@
 -- CREATE VIEW qry_COMP_TM_DETAIL AS 
 WITH ROSTER AS (
-    /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
-     or is null, and DOH is before or equal to last month. */
     SELECT
         RL.*,
         C.*
@@ -18,11 +16,12 @@ WITH ROSTER AS (
                 qryCalendar
             WHERE
                 year = 2025
-                AND YYYYMM <= FORMAT(GETDATE(), 'yyyy_MM')
-                -- AND YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+                AND YYYYMM <= FORMAT(GETDATE(), 'yyyy_MM') -- AND YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
         ROLE = 'REP'
+        /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
+         or is null, and DOH is before or equal to last month. */
         AND (
             FORMAT(DOT, 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')
             OR DOT IS NULL
@@ -60,11 +59,26 @@ OPPS AS (
         ) AS SALES_CREDIT_REP_EMAIL,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
+        STAGENAME,
         ISIMPL,
-        IMPLANT_UNITS,
-        REVENUE_UNITS,
-        SALES,
-        ASP,
+        /* ENSURE COMP IS ONLY CALC'D FOR 'Revenue Recognized'!!! */
+        CASE
+            WHEN STAGENAME = 'Revenue Recognized' THEN IMPLANT_UNITS
+            ELSE 0
+        END AS IMPLANT_UNITS,
+        CASE
+            WHEN STAGENAME = 'Revenue Recognized' THEN REVENUE_UNITS
+            ELSE 0
+        END AS REVENUE_UNITS,
+        CASE
+            WHEN STAGENAME = 'Revenue Recognized' THEN SALES
+            ELSE 0
+        END AS SALES,
+        CASE
+            WHEN STAGENAME = 'Revenue Recognized' THEN ASP
+            ELSE 0
+        END AS ASP,
+        /*****************************************************/
         T.EMAIL AS CS_PO_EMAIL,
         CASE
             WHEN T.PO_TYPE = 'revenue' THEN ISNULL(T.PO_PER, 0) * REVENUE_UNITS
@@ -111,7 +125,8 @@ OPPS AS (
             OR IMPLANTED_YYYY = 2025
         )
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
-        AND STAGENAME = 'Revenue Recognized'
+        /* Must keep both 'Revenue Recognized' and 'Implant Completed' to calc CS deductions */
+        AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
 ),
 QUOTA AS (
     SELECT
@@ -176,6 +191,7 @@ FROM
                     ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) AS SALES_CREDIT_REP_EMAIL,
                     NAME_REP,
                     REGION_NM,
+                    REGION_ID,
                     OPPS.CLOSEDATE,
                     ISNULL(OPPS.CLOSE_YYYYMM, ROSTER.YYYYMM) AS CLOSE_YYYYMM,
                     ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ) AS CLOSE_YYYYQQ,
@@ -190,6 +206,7 @@ FROM
                     OPPS.PHYSICIAN_ID,
                     OPPS.INDICATION_FOR_USE__C,
                     OPPS.REASON_FOR_IMPLANT__C,
+                    STAGENAME,
                     ISNULL(ISIMPL, 0) AS ISIMPL,
                     ISNULL(IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
                     ISNULL(REVENUE_UNITS, 0) AS REVENUE_UNITS,
@@ -222,7 +239,12 @@ FROM
                     CS_PO_EMAIL,
                     ISNULL(PO_PER, 0) AS [CS_PO_$],
                     ISNULL([PO_%], 0) AS [CS_PO_%],
-                    PO_TYPE AS CS_PO_TYPE
+                    PO_TYPE AS CS_PO_TYPE,
+                    CASE
+                        WHEN PO_TYPE = 'implant' THEN IMPLANTED_YYYYMM
+                        WHEN PO_TYPE = 'revenue' THEN CLOSE_YYYYMM
+                        ELSE NULL
+                    END AS CS_PO_YYYYMM
                 FROM
                     ROSTER FULL
                     OUTER JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
