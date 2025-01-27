@@ -1,3 +1,6 @@
+DECLARE @YYYYMM AS VARCHAR(7) = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM');
+
+
 WITH DETAIL AS (
     SELECT
         EID,
@@ -13,7 +16,6 @@ WITH DETAIL AS (
         SUM(L2_REV) AS L2_REV,
         SUM(L1_PO) AS L1_PO,
         SUM(L2_PO) AS L2_PO,
-        SUM(CS_DEDUCTION) AS CS_DEDUCTION,
         /* only calc the implant accel true up if it's the last month of the quarter and
          impl_rev_ratio is >= 0.85 */
         MAX(
@@ -31,7 +33,7 @@ WITH DETAIL AS (
                     ELSE 0
                 END
             ) * 0.05
-        ) - SUM(CS_DEDUCTION) AS TTL_PO,
+        ) AS TTL_PO,
         SUM(IMPLANT_UNITS) AS IMPLANT_UNITS,
         SUM(REVENUE_UNITS) AS REVENUE_UNITS,
         MAX(IMPL_REV_RATIO) AS QTD_IMPL_REV_RATIO
@@ -64,8 +66,7 @@ WITH DETAIL AS (
                     CLOSE_YYYYQQ
                     ORDER BY
                         CLOSEDATE DESC
-                ) AS QTD_SALES,
-                [CS_PO_$] + [CS_PO_%] AS CS_DEDUCTION
+                ) AS QTD_SALES
             FROM
                 qry_COMP_TM_DETAIL
         ) AS A
@@ -77,9 +78,37 @@ WITH DETAIL AS (
         YYYYQQ,
         THRESHOLD,
         [PLAN]
+),
+CS_DED AS (
+    SELECT
+        SALES_CREDIT_REP_EMAIL,
+        CS_PO_YYYYMM,
+        [CS_PO_$] + [CS_PO_%] AS CS_DEDUCTION
+    FROM
+        qry_COMP_TM_DETAIL
+    WHERE
+        CS_PO_YYYYMM IS NOT NULL
 )
 SELECT
-    DETAIL.*,
+    EID,
+    NAME_REP,
+    REGION_NM,
+    DETAIL.YYYYMM,
+    DETAIL.YYYYQQ,
+    THRESHOLD,
+    [PLAN],
+    SALES,
+    QTD_SALES,
+    L1_REV,
+    L2_REV,
+    L1_PO,
+    L2_PO,
+    ISNULL(CS_DEDUCTION, 0) AS CS_DEDUCTION,
+    IMPLANT_ACCEL_TRUE_UP,
+    TTL_PO - ISNULL(CS_DEDUCTION, 0) AS TTL_PO,
+    IMPLANT_UNITS,
+    REVENUE_UNITS,
+    QTD_IMPL_REV_RATIO,
     ISNULL(G.PO_AMT, 0) AS GAURANTEE_AMT,
     CASE
         WHEN ISNULL(G.PO_AMT, 0) > TTL_PO THEN G.PO_AMT - TTL_PO
@@ -92,5 +121,8 @@ SELECT
 FROM
     DETAIL
     LEFT JOIN qryGuarantee G ON G.EMP_EMAIL = DETAIL.EID
-    AND G.YYYYMM = DETAIL.YYYYMM 
-    -- WHERE DETAIL.YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+    AND G.YYYYMM = DETAIL.YYYYMM
+    LEFT JOIN CS_DED ON CS_DED.CS_PO_YYYYMM = DETAIL.YYYYMM
+    AND DETAIL.EID = CS_DED.SALES_CREDIT_REP_EMAIL
+WHERE
+    DETAIL.YYYYMM = @YYYYMM
