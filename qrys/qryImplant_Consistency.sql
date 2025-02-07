@@ -63,9 +63,11 @@ ACCTS AS (
             FROM
                 qryCalendar
             WHERE
-                YYYYMM BETWEEN '2023_01'
+                YYYYMM BETWEEN '2021_01'
                 AND FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) AS C
+    WHERE
+        SHIPPINGCOUNTRYCODE = 'US'
 ) -- Count months in each streak group,
 SELECT
     ISNULL(ACT_ID, ID) AS ACT_ID,
