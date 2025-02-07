@@ -1,6 +1,11 @@
 SELECT
-    *,
-    L1_PO + L2_PO AS PO_AMT
+    A.*,
+    L1_PO + L2_PO AS ASD_TTL_PO,
+    G.PO_AMT AS GUARANTEE,
+    CASE
+        WHEN (L1_PO + L2_PO) > ISNULL(G.PO_AMT, 0) THEN L1_PO + L2_PO
+        ELSE G.PO_AMT
+    END AS PO_AMT
     /******/
     -- INTO tmpASD_PO
     /*****/
@@ -36,3 +41,5 @@ FROM
             [L1 Rate],
             [L2 Rate]
     ) AS A
+    LEFT JOIN qryGuarantee G ON A.CLOSE_YYYYMM = G.YYYYMM
+    AND A.SALES_CREDIT_ASD_EMAIL = G.EMP_EMAIL
