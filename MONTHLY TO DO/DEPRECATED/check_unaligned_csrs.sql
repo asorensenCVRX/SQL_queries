@@ -1,0 +1,17 @@
+SELECT
+    NAME_REP,
+    REP_EMAIL,
+    ROLE,
+    TERRITORY,
+    REGION,
+    REGION_ID,
+    ACTIVE_YYYYMM,
+    F.TYPE,
+    F.ID
+FROM
+    qryRoster R
+    LEFT JOIN tblFCE_ALIGN F ON R.REP_EMAIL = F.FCE_EMAIL
+WHERE
+    role = 'FCE'
+    AND [isLATEST?] = 1
+    AND STATUS = 'ACTIVE'
