@@ -1,5 +1,32 @@
+-- CREATE VIEW qryOpps AS
+WITH VA_HCA AS (
+    /** use this to get ASP for VA and HCA accounts **/
+    SELECT
+        DHC_IDN_NAME__C,
+        SUM(SALES) [SALES_r12],
+        SUM(REVENUE_UNITS) [REV_UNITS_R12],
+        SUM(SALES) / SUM(REVENUE_UNITS) [ASP_r12]
+    FROM
+        [tmpOpps]
+    WHERE
+        DHC_IDN_NAME__C IN (
+            'Department of Veterans Affairs',
+            'HCA Healthcare'
+        )
+        AND CLOSE_YYYYMM IN (
+            SELECT
+                DISTINCT YYYYMM
+            FROM
+                qryCalendar
+            WHERE
+                R12 = 'C12'
+        )
+        AND OPP_STATUS = 'CLOSED'
+    GROUP BY
+        DHC_IDN_NAME__C
+)
 SELECT
-    *,
+    T.*,
     CASE
         WHEN PHYSICIAN_ID IS NULL
         OR STAGENAME NOT IN (
@@ -22,7 +49,14 @@ SELECT
                 ISNULL(IMPLANTED_DT, CLOSEDATE),
                 NAME
         )
-    END AS [REFERRAL_COUNT_TTL]
+    END AS [REFERRAL_COUNT_TTL],
+    CASE
+        WHEN VA_HCA.ASP_r12 IS NOT NULL
+        AND ISIMPL = 1 THEN VA_HCA.ASP_r12
+        WHEN VA_HCA.ASP_r12 IS NOT NULL
+        AND ISIMPL = 0 THEN 0
+        ELSE SALES
+    END AS SALES_COMMISSIONABLE
 FROM
     (
         SELECT
@@ -483,3 +517,4 @@ FROM
             )
             AND ACCOUNT_INDICATION__C NOT LIKE '%TEST%'
     ) AS T
+    LEFT JOIN VA_HCA ON T.DHC_IDN_NAME__C = VA_HCA.DHC_IDN_NAME__C
