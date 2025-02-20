@@ -1,10 +1,10 @@
 -- CREATE VIEW qry_COMP_TM_DETAIL AS 
 WITH ROSTER AS (
     SELECT
-        RL.*,
+        R.*,
         C.*
     FROM
-        qryReport_Ladder RL
+        qryRoster R
         /* Bring in all months up to and including the current month.
          This is necessary to make even reps with no sales show up in the comp month. */
         CROSS JOIN (
@@ -16,20 +16,26 @@ WITH ROSTER AS (
                 qryCalendar
             WHERE
                 year = 2025
-                AND YYYYMM <= FORMAT(GETDATE(), 'yyyy_MM') -- AND YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+                AND YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
         ROLE = 'REP'
         /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
          or is null, and DOH is before or equal to last month. */
-        AND (
-            FORMAT(DOT, 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')
-            OR DOT IS NULL
-        )
-        AND (
-            FORMAT(DOH, 'yyyy_MM') <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
-            OR DOH IS NULL
-        )
+        AND FORMAT(ISNULL(DOT, '2099-12-13'), 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')
+        AND FORMAT(ISNULL(DOH, '1900-01-01'), 'yyyy_MM') <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+),
+ALIGNMENT AS (
+    /* use this to align termed reps */
+    SELECT
+        DISTINCT REP_EMAIL,
+        NAME_REP,
+        REGION_ID,
+        LEFT(REGION_NM, CHARINDEX('(', REGION_NM) - 2) AS REGION_NM
+    FROM
+        qryRoster
+    WHERE
+        role = 'REP'
 ),
 OPPS AS (
     SELECT
@@ -39,6 +45,7 @@ OPPS AS (
         IMPLANTED_DT,
         IMPLANTED_YYYYMM,
         IMPLANTED_YYYYQQ,
+        DHC_IDN_NAME__C,
         ACCOUNT_INDICATION__C,
         O.ACT_ID,
         O.ACT_OWNER_EMAIL,
@@ -50,13 +57,7 @@ OPPS AS (
         /* first, bring in the email from tblAlign_Opp.
          If that's null, bring in the email from tblAlign_Act. And finally, if that is null then bring in
          ACT_OWNER_EMAIL from qryOpps. */
-        ISNULL(
-            ISNULL(
-                AO.EMAIL,
-                AA.OWNER_EMAIL
-            ),
-            O.ACT_OWNER_EMAIL
-        ) AS SALES_CREDIT_REP_EMAIL,
+        COALESCE(AO.EMAIL, AA.OWNER_EMAIL, O.ACT_OWNER_EMAIL) AS SALES_CREDIT_REP_EMAIL,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
         STAGENAME,
@@ -74,6 +75,11 @@ OPPS AS (
             WHEN STAGENAME = 'Revenue Recognized' THEN SALES
             ELSE 0
         END AS SALES,
+        SALES_COMMISSIONABLE,
+        CASE
+            WHEN STAGENAME = 'Revenue Recognized' THEN AMOUNT
+            ELSE 0
+        END AS AMOUNT,
         CASE
             WHEN STAGENAME = 'Revenue Recognized' THEN ASP
             ELSE 0
@@ -154,34 +160,40 @@ FROM
             *,
             CASE
                 /*Solve: if this sales is negative and we're still below threshold then sales  */
-                WHEN ISNULL(sales, 0) < 0
-                AND ISNULL(QTD_SALES, 0) <= THRESHOLD THEN SALES
+                WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
+                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN SALES_COMMISSIONABLE
                 /*Solve: if were not currently above threshold then all Sales are in L1 still */
-                WHEN ISNULL(QTD_SALES, 0) <= THRESHOLD THEN ISNULL(sales, 0)
+                WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN ISNULL(SALES_COMMISSIONABLE, 0)
                 /*Solve:   if we were NOT already above threshold then return a portion/all of this sale up to threshold*/
-                WHEN (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0)) <= THRESHOLD THEN THRESHOLD - (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0))
+                WHEN (
+                    ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
+                ) <= THRESHOLD THEN THRESHOLD - (
+                    ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
+                )
                 ELSE 0
             END AS L1_REV,
             CASE
                 /*Solve: if this sales is negative and we're currently l2 and previously were in l2 then sales  */
-                WHEN ISNULL(sales, 0) < 0
-                AND ISNULL(QTD_SALES, 0) > THRESHOLD
-                AND ISNULL(QTD_SALES, 0) - ISNULL(sales, 0) > THRESHOLD THEN sales
+                WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
+                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) > THRESHOLD
+                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN SALES_COMMISSIONABLE
                 /*Solve: if this sales is negative and we're no longer above threshold but we were before this line item then   */
-                WHEN ISNULL(sales, 0) < 0
-                AND ISNULL(QTD_SALES, 0) < THRESHOLD
+                WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
+                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) < THRESHOLD
                 AND ISNULL(
-                    QTD_SALES,
+                    QTD_SALES_COMISSIONABLE,
                     0
-                ) - ISNULL(sales, 0) > THRESHOLD THEN (THRESHOLD - ISNULL(QTD_SALES, 0)) + ISNULL(sales, 0)
+                ) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN (THRESHOLD - ISNULL(QTD_SALES_COMISSIONABLE, 0)) + ISNULL(SALES_COMMISSIONABLE, 0)
                 /*Solve: if we're already passed quota before this record OR sales is still below Q4BL at this line then 0 sales get passed. */
-                WHEN (ISNULL(QTD_SALES, 0)) <= THRESHOLD
-                OR ISNULL(SALES, 0) = 0 THEN 0
+                WHEN (ISNULL(QTD_SALES_COMISSIONABLE, 0)) <= THRESHOLD
+                OR ISNULL(SALES_COMMISSIONABLE, 0) = 0 THEN 0
                 /*Solve: if we were already at/passed threshold then sales */
-                WHEN (ISNULL(QTD_SALES, 0) - ISNULL(sales, 0)) > THRESHOLD
-                AND ISNULL(QTD_SALES, 0) >= THRESHOLD THEN sales
+                WHEN (
+                    ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
+                ) > THRESHOLD
+                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN SALES_COMMISSIONABLE
                 /*Solve: if we are now at/passed threshold and currently less than quota then take the sales over the threshold */
-                WHEN ISNULL(QTD_SALES, 0) >= THRESHOLD THEN ISNULL(QTD_SALES, 0) - THRESHOLD
+                WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN ISNULL(QTD_SALES_COMISSIONABLE, 0) - THRESHOLD
                 ELSE NULL
             END L2_REV,
             QTD_IMPLANT_UNITS / COALESCE(NULLIF(QTD_REVENUE_UNITS, 0), 1) AS QTD_IMPL_REV_RATIO
@@ -189,19 +201,21 @@ FROM
             (
                 SELECT
                     ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) AS SALES_CREDIT_REP_EMAIL,
-                    NAME_REP,
-                    REGION_NM,
-                    REGION_ID,
+                    ISNULL(ALIGNMENT.NAME_REP, ROSTER.NAME_REP) AS NAME_REP,
+                    ISNULL(ALIGNMENT.REGION_NM, ROSTER.REGION) AS REGION_NM,
+                    ISNULL(ALIGNMENT.REGION_ID, ROSTER.REGION_ID) AS REGION_ID,
                     OPPS.CLOSEDATE,
                     ISNULL(OPPS.CLOSE_YYYYMM, ROSTER.YYYYMM) AS CLOSE_YYYYMM,
                     ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ) AS CLOSE_YYYYQQ,
                     OPPS.IMPLANTED_DT,
                     OPPS.IMPLANTED_YYYYMM,
                     OPPS.IMPLANTED_YYYYQQ,
+                    OPPS.DHC_IDN_NAME__C,
                     OPPS.ACCOUNT_INDICATION__C,
                     OPPS.ACT_ID,
                     OPPS.NAME AS OPP_NAME,
                     OPPS.OPP_ID,
+                    OPPS.OPP_OWNER_EMAIL,
                     OPPS.PHYSICIAN,
                     OPPS.PHYSICIAN_ID,
                     OPPS.INDICATION_FOR_USE__C,
@@ -211,16 +225,21 @@ FROM
                     ISNULL(IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
                     ISNULL(REVENUE_UNITS, 0) AS REVENUE_UNITS,
                     ISNULL(SALES, 0) AS SALES,
+                    ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
+                    CASE
+                        WHEN ISNULL(AMOUNT, 0) <> SALES THEN 1
+                        ELSE 0
+                    END AS [REBATE?],
                     ISNULL(ASP, 0) AS ASP,
                     THRESHOLD,
                     [PLAN],
-                    SUM(ISNULL(SALES, 0)) OVER (
+                    SUM(ISNULL(SALES_COMMISSIONABLE, 0)) OVER (
                         PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
                         ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ)
                         ORDER BY
                             OPPS.CLOSEDATE,
                             OPPS.NAME
-                    ) AS QTD_SALES,
+                    ) AS QTD_SALES_COMISSIONABLE,
                     /* make sure implants are only counted based on impl date, not closedate */
                     SUM(ISNULL(IMPLANT_UNITS, 0)) OVER(
                         PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
@@ -248,8 +267,9 @@ FROM
                 FROM
                     ROSTER FULL
                     OUTER JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
-                    AND ROSTER.YYYYMM = OPPS.CLOSE_YYYYMM
+                    AND OPPS.CLOSE_YYYYMM = ROSTER.YYYYMM
                     LEFT JOIN QUOTA ON ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) = QUOTA.EID
                     AND ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ) = QUOTA.YYYYQQ
+                    LEFT JOIN ALIGNMENT ON OPPS.SALES_CREDIT_REP_EMAIL = ALIGNMENT.REP_EMAIL
             ) AS A
     ) AS B

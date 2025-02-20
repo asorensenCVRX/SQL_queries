@@ -16,12 +16,33 @@ WITH SALES AS (
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
         AND OPP_STATUS = 'CLOSED'
         AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
+),
+ROSTER AS (
+    SELECT
+        R.*
+    FROM
+        qryROSTER R
+    WHERE
+        ROLE = 'FCE'
+        AND ISNULL(DOT_YYYYMM, '2099_12') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
 )
 SELECT
     A.*,
-    ISNULL(FTP.PO_PER, 0) AS TGT_PO,
+    CASE
+        WHEN FTP.PO_TYPE = 'revenue' THEN ISNULL(FTP.PO_PER, 0) * REVENUE_UNITS
+        ELSE ISNULL(FTP.PO_PER, 0)
+    END AS TGT_PO,
+    CASE
+        WHEN FTP.PO_TYPE = 'revenue' THEN SALES * ISNULL(FTP.[PO_%], 0)
+        ELSE ISNULL(FTP.[PO_%], 0)
+    END AS [PO_%],
     FTP.[TYPE] AS TGT_TYPE,
-    FTP.PO_TYPE
+    FTP.PO_TYPE,
+    CASE
+        WHEN PO_TYPE = 'implant' THEN IMPLANTED_YYYYMM
+        WHEN PO_TYPE = 'revenue' THEN CLOSE_YYYYMM
+        ELSE NULL
+    END AS TGT_PO_YYYYMM
 FROM
     (
         SELECT
@@ -45,6 +66,18 @@ FROM
             PHYSICIAN,
             PHYSICIAN_ID,
             ISNULL(SALES, 0) AS SALES,
+            ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
+            SUM(
+                CASE
+                    WHEN STAGENAME = 'Revenue Recognized' THEN (ISNULL(SALES_COMMISSIONABLE, 0))
+                    ELSE 0
+                END
+            ) OVER (
+                PARTITION BY RL.REP_EMAIL
+                ORDER BY
+                    CLOSEDATE,
+                    NAME
+            ) AS YTD_SALES_COMMISSIONABLE,
             CASE
                 WHEN STAGENAME = 'Revenue Recognized' THEN 1
                 ELSE 0
@@ -55,26 +88,9 @@ FROM
             STAGENAME
         FROM
             SALES FULL
-            OUTER JOIN (
-                SELECT
-                    *
-                FROM
-                    qryReport_Ladder
-                WHERE
-                    ROLE = 'FCE'
-                    /* only FCEs who were termed in or after the previous month */
-                     AND (
-                        FORMAT(DOT, 'yyyy_MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
-                        OR DOT IS NULL
-                    )
-                    /* only FCEs who were hired in or before the previous month */
-                    AND (
-                        FORMAT(DOH, 'yyyy_MM') <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
-                        OR DOH IS NULL
-                    )
-            ) RL ON SALES.REG_ID = RL.REGION_ID
+            OUTER JOIN ROSTER RL ON SALES.REG_ID = RL.REGION_ID
             /* ensure no credit is given for sales before DOH */
-            AND SALES.CLOSEDATE >= RL.DOH
+            AND SALES.CLOSE_YYYYMM >= RL.ACTIVE_YYYYMM
             /* ensure no credit is given for sales after DOT */
             AND SALES.CLOSEDATE <= ISNULL(DOT, '2099-12-31')
     ) AS A

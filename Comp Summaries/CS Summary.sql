@@ -13,7 +13,7 @@ WITH DETAIL AS (
             /* regional payments are made only on rev rec'd opps */
             CASE
                 WHEN CLOSE_YYYYMM = @YYYYMM
-                AND STAGENAME = 'Revenue Recognized' THEN SALES
+                AND STAGENAME = 'Revenue Recognized' THEN SALES_COMMISSIONABLE
                 ELSE 0
             END
         ) AS SALES,
@@ -32,7 +32,14 @@ WITH DETAIL AS (
                 WHEN TGT_PO_YYYYMM = @YYYYMM THEN TGT_PO
             END
         ) AS TGT_PO,
-        MAX(YTD_SALES) AS YTD_SALES
+        ISNULL(
+            MAX(
+                CASE
+                    WHEN CLOSE_YYYYMM = @YYYYMM THEN YTD_SALES_COMMISSIONABLE
+                END
+            ),
+            0
+        ) AS YTD_SALES
     FROM
         qry_COMP_CS_DETAIL
     WHERE

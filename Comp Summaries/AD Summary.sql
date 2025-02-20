@@ -20,7 +20,7 @@ FROM
             [PLAN],
             SUM(IMPLANT_UNITS) AS IMPLANT_UNITS,
             SUM(REVENUE_UNITS) AS REVENUE_UNITS,
-            SUM(SALES) AS SALES,
+            SUM(SALES_COMMISSIONABLE) AS SALES,
             SUM([L1_REV]) AS L1_REV,
             [L1 Rate],
             SUM(L2_REV) AS L2_REV,

@@ -10,7 +10,7 @@ WITH DETAIL AS (
         YYYYQQ,
         THRESHOLD,
         [PLAN],
-        SUM(SALES) AS SALES,
+        SUM(SALES_COMMISSIONABLE) AS SALES,
         MAX(QTD_SALES) AS QTD_SALES,
         SUM(L1_REV) AS L1_REV,
         SUM(L2_REV) AS L2_REV,
@@ -47,7 +47,7 @@ WITH DETAIL AS (
                 CLOSE_YYYYQQ AS YYYYQQ,
                 THRESHOLD,
                 [PLAN],
-                SALES,
+                SALES_COMMISSIONABLE,
                 L1_REV,
                 L2_REV,
                 L1_PO,
@@ -61,7 +61,7 @@ WITH DETAIL AS (
                     ORDER BY
                         CLOSEDATE DESC
                 ) AS IMPL_REV_RATIO,
-                FIRST_VALUE(QTD_SALES) OVER (
+                FIRST_VALUE(QTD_SALES_COMISSIONABLE) OVER (
                     PARTITION BY SALES_CREDIT_REP_EMAIL,
                     CLOSE_YYYYQQ
                     ORDER BY
