@@ -54,34 +54,60 @@ OPPS AS (
         O.NAME,
         PHYSICIAN,
         PHYSICIAN_ID,
-        /* first, bring in the email from tblAlign_Opp.
+        /* first, bring in the email from tblSalesSplits. If that's null, bring in tblAlign_Opp.
          If that's null, bring in the email from tblAlign_Act. And finally, if that is null then bring in
          ACT_OWNER_EMAIL from qryOpps. */
-        COALESCE(AO.EMAIL, AA.OWNER_EMAIL, O.ACT_OWNER_EMAIL) AS SALES_CREDIT_REP_EMAIL,
+        COALESCE(
+            S.SALES_CREDIT_REP_EMAIL,
+            AO.EMAIL,
+            AA.OWNER_EMAIL,
+            O.ACT_OWNER_EMAIL
+        ) AS SALES_CREDIT_REP_EMAIL,
+        AA.REP_TERR_ID,
+        AA.ZIP_TERR_ID,
+        AA.COVERAGE_TYPE,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
         STAGENAME,
         ISIMPL,
         /* ENSURE COMP IS ONLY CALC'D FOR 'Revenue Recognized'!!! */
         CASE
-            WHEN STAGENAME = 'Revenue Recognized' THEN IMPLANT_UNITS
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NOT NULL THEN IMPLANT_UNITS * S.SPLIT
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NULL THEN IMPLANT_UNITS
             ELSE 0
         END AS IMPLANT_UNITS,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized' THEN REVENUE_UNITS
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NOT NULL THEN REVENUE_UNITS * S.SPLIT
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NULL THEN REVENUE_UNITS
             ELSE 0
         END AS REVENUE_UNITS,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized' THEN SALES
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NOT NULL THEN SALES * S.SPLIT
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NULL THEN SALES
             ELSE 0
         END AS SALES,
-        SALES_COMMISSIONABLE,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized' THEN AMOUNT
+            WHEN S.SPLIT IS NOT NULL THEN SALES_COMMISSIONABLE * S.SPLIT
+            ELSE SALES_COMMISSIONABLE
+        END AS SALES_COMMISSIONABLE,
+        CASE
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NOT NULL THEN AMOUNT * S.SPLIT
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NULL THEN AMOUNT
             ELSE 0
         END AS AMOUNT,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized' THEN ASP
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NOT NULL THEN O.ASP * S.SPLIT
+            WHEN STAGENAME = 'Revenue Recognized'
+            AND S.SPLIT IS NULL THEN O.ASP
             ELSE 0
         END AS ASP,
         /*****************************************************/
@@ -100,7 +126,7 @@ OPPS AS (
         /* check tblAlign_Opp */
         LEFT JOIN tblAlign_Opp AO ON O.OPP_ID = AO.OPP_ID
         /* check tblAlign_Act */
-        LEFT JOIN tblAlign_Act AA ON O.ACT_ID = AA.ACT_ID
+        LEFT JOIN qryAlign_Act AA ON O.ACT_ID = AA.ACT_ID
         AND O.CLOSEDATE BETWEEN AA.ST_DT
         AND AA.END_DT
         /* check FCE payouts */
@@ -122,6 +148,8 @@ OPPS AS (
             WHEN T.PO_TYPE = 'implant' THEN O.ISIMPL
             WHEN T.PO_TYPE = 'revenue' THEN O.REVENUE_UNITS
         END >= 1
+        /* bring in tblSalesSplits so credit for opps can be shared */
+        LEFT JOIN tblSalesSplits S ON O.OPP_ID = S.OPP_ID
     WHERE
         OPP_STATUS = 'CLOSED'
         AND SHIPPINGCOUNTRYCODE = 'US'
@@ -202,6 +230,9 @@ FROM
                 SELECT
                     ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) AS SALES_CREDIT_REP_EMAIL,
                     ISNULL(ALIGNMENT.NAME_REP, ROSTER.NAME_REP) AS NAME_REP,
+                    OPPS.COVERAGE_TYPE,
+                    OPPS.REP_TERR_ID,
+                    OPPS.ZIP_TERR_ID,
                     ISNULL(ALIGNMENT.REGION_NM, ROSTER.REGION) AS REGION_NM,
                     ISNULL(ALIGNMENT.REGION_ID, ROSTER.REGION_ID) AS REGION_ID,
                     OPPS.CLOSEDATE,
