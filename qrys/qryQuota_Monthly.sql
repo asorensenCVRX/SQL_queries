@@ -58,7 +58,7 @@ FROM
                 WHERE
                     LEFT(YYYYQQ, 4) = '2025'
             ) AS CAL ON RATES.YYYYQQ = CAL.YYYYQQ
-            LEFT JOIN tblQuota Q ON Q.EID = RATES.EID
+            LEFT JOIN tblQuota Q ON Q.TERR_ID = RATES.TERRITORY_ID
             AND (
                 (
                     Q.YYYYMM IS NOT NULL
