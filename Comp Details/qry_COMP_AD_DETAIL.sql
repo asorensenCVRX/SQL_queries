@@ -31,6 +31,19 @@ WITH ROSTER AS (
             OR DOH IS NULL
         )
 ),
+ALIGNMENT AS (
+    /* use this to align termed reps */
+    SELECT
+        DISTINCT REP_EMAIL,
+        NAME_REP,
+        REGION_ID,
+        RM_EMAIL,
+        LEFT(REGION_NM, CHARINDEX('(', REGION_NM) - 2) AS REGION_NM
+    FROM
+        qryRoster
+    WHERE
+        role = 'REP'
+),
 OPPS AS (
     SELECT
         CLOSEDATE,
@@ -50,13 +63,7 @@ OPPS AS (
         /* first, bring in the email from tblAlign_Opp.
          If that's null, bring in the email from tblAlign_Act. And finally, if that is null then bring in
          ACT_OWNER_EMAIL from qryOpps. */
-        ISNULL(
-            ISNULL(
-                AO.EMAIL,
-                AA.OWNER_EMAIL
-            ),
-            O.ACT_OWNER_EMAIL
-        ) AS SALES_CREDIT_REP_EMAIL,
+        COALESCE(AO.EMAIL, AA.OWNER_EMAIL, O.ACT_OWNER_EMAIL) AS SALES_CREDIT_REP_EMAIL,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
         ISIMPL,
@@ -134,9 +141,9 @@ FROM
         FROM
             (
                 SELECT
-                    REGION_NM,
-                    ROSTER.REGION_ID,
-                    ROSTER.RM_EMAIL AS SALES_CREDIT_ASD_EMAIL,
+                    ISNULL(ROSTER.REGION_NM, ALIGNMENT.REGION_NM) AS REGION_NM,
+                    ISNULL(ROSTER.REGION_ID, ALIGNMENT.REGION_ID) AS REGION_ID,
+                    ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL) AS SALES_CREDIT_ASD_EMAIL,
                     SALES_CREDIT_REP_EMAIL,
                     OPPS.CLOSEDATE,
                     CLOSE_YYYYMM,
@@ -156,7 +163,7 @@ FROM
                     ISNULL(IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
                     ISNULL(REVENUE_UNITS, 0) AS REVENUE_UNITS,
                     ISNULL(SALES, 0) AS SALES,
-                    ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE, 
+                    ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
                     CASE
                         WHEN ISNULL(AMOUNT, 0) <> ISNULL(SALES, 0) THEN 1
                         ELSE 0
@@ -167,7 +174,7 @@ FROM
                     [L1 Rate],
                     [L2 Rate],
                     SUM(ISNULL(SALES_COMMISSIONABLE, 0)) OVER (
-                        PARTITION BY RM_EMAIL,
+                        PARTITION BY ROSTER.RM_EMAIL,
                         OPPS.CLOSE_YYYYQQ
                         ORDER BY
                             OPPS.CLOSEDATE,
@@ -175,14 +182,14 @@ FROM
                     ) AS QTD_SALES_COMMISSIONABLE,
                     /* make sure implants are only counted based on impl date, not closedate */
                     SUM(ISNULL(IMPLANT_UNITS, 0)) OVER(
-                        PARTITION BY RM_EMAIL,
+                        PARTITION BY ROSTER.RM_EMAIL,
                         OPPS.IMPLANTED_YYYYQQ
                         ORDER BY
                             ISNULL(OPPS.IMPLANTED_DT, OPPS.CLOSEDATE),
                             OPPS.NAME
                     ) AS QTD_IMPLANT_UNITS,
                     SUM(ISNULL(REVENUE_UNITS, 0)) OVER(
-                        PARTITION BY RM_EMAIL,
+                        PARTITION BY ROSTER.RM_EMAIL,
                         OPPS.CLOSE_YYYYQQ
                         ORDER BY
                             OPPS.CLOSEDATE,
@@ -195,6 +202,7 @@ FROM
                     LEFT JOIN QUOTA ON RM_EMAIL = QUOTA.EID
                     AND OPPS.CLOSE_YYYYQQ = QUOTA.YYYYQQ
                     LEFT JOIN tblRates_RM R ON R.REGION_ID = ROSTER.REGION_ID
+                    LEFT JOIN ALIGNMENT ON ALIGNMENT.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
             ) AS A
         WHERE
             CLOSE_YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
