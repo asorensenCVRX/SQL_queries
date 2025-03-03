@@ -30,7 +30,7 @@ FROM
         FROM
             qry_COMP_ASD_DETAIL
         WHERE
-            CLOSE_YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+            CLOSE_YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         GROUP BY
             CLOSE_YYYYMM,
             REGION_NM,
