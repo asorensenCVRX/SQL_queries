@@ -11,7 +11,7 @@ WITH DETAIL AS (
         THRESHOLD,
         [PLAN],
         SUM(SALES_COMMISSIONABLE) AS SALES,
-        MAX(QTD_SALES) AS QTD_SALES,
+        MAX(QTD_SALES_COMMISSIONABLE) AS QTD_SALES,
         SUM(L1_REV) AS L1_REV,
         SUM(L2_REV) AS L2_REV,
         SUM(L1_PO) AS L1_PO,
@@ -21,7 +21,7 @@ WITH DETAIL AS (
         MAX(
             CASE
                 WHEN IMPL_REV_RATIO >= 0.85
-                AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES
+                AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES_COMMISSIONABLE
                 ELSE 0
             END
         ) * 0.05 AS IMPLANT_ACCEL_TRUE_UP,
@@ -29,7 +29,7 @@ WITH DETAIL AS (
             MAX(
                 CASE
                     WHEN IMPL_REV_RATIO >= 0.85
-                    AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES
+                    AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES_COMMISSIONABLE
                     ELSE 0
                 END
             ) * 0.05
@@ -61,12 +61,12 @@ WITH DETAIL AS (
                     ORDER BY
                         CLOSEDATE DESC
                 ) AS IMPL_REV_RATIO,
-                FIRST_VALUE(QTD_SALES_COMISSIONABLE) OVER (
+                MAX(QTD_SALES_COMISSIONABLE) OVER (
                     PARTITION BY SALES_CREDIT_REP_EMAIL,
-                    CLOSE_YYYYQQ
+                    CLOSE_YYYYMM
                     ORDER BY
                         CLOSEDATE DESC
-                ) AS QTD_SALES
+                ) AS QTD_SALES_COMMISSIONABLE
             FROM
                 qry_COMP_TM_DETAIL
         ) AS A
