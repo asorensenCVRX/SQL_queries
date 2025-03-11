@@ -47,6 +47,7 @@ FROM
                 ISNULL(DOT, ''2099-12-31''),
                 ''yyyy_MM''
             ) >= FORMAT(DATEADD(MONTH, -1, GETDATE()), ''yyyy_MM'')
+            AND ISNULL(DOT, ''2099-12-31'') >= DATEADD(MONTH, -1, GETDATE())
     ) AS SOURCE PIVOT (SUM(MBO_COMPLETION) FOR YYYYMM IN (' + @columns + ')) AS PVT';
 
 
