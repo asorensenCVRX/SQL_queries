@@ -185,6 +185,54 @@ CS_DED AS (
     GROUP BY
         SALES_CREDIT_REP_EMAIL,
         CS_PO_YYYYMM
+),
+PRGRM_ACCEL AS (
+    SELECT
+        SALES_CREDIT_REP_EMAIL,
+        JOIN_KEY,
+        SUM(PROGRAM_ACCEL_PO) AS PROGRAM_ACCEL_PO
+    FROM
+        (
+            SELECT
+                CLOSEDATE,
+                CLOSE_YYYYMM,
+                CLOSE_YYYYQQ,
+                CASE
+                    WHEN CLOSE_YYYYQQ = '2025_Q1' THEN '2025_03'
+                    WHEN CLOSE_YYYYQQ = '2025_Q2' THEN '2025_06'
+                    WHEN CLOSE_YYYYQQ = '2025_Q3' THEN '2025_09'
+                    WHEN CLOSE_YYYYQQ = '2025_Q4' THEN '2025_12'
+                END AS JOIN_KEY,
+                IMPLANTED_DT,
+                IMPLANTED_YYYYMM,
+                ACCOUNT_INDICATION__C,
+                ACT_ID,
+                DHC_IDN_NAME__C,
+                OPP_NAME,
+                OPP_ID,
+                SALES_CREDIT_REP_EMAIL,
+                SALES_COMMISSIONABLE,
+                SALES_COMMISSIONABLE * 0.05 AS PROGRAM_ACCEL_PO
+            FROM
+                qry_COMP_TM_DETAIL T
+            WHERE
+                ACT_ID IN (
+                    SELECT
+                        SFDC_ID
+                    FROM
+                        tmpProgram_KPI
+                    WHERE
+                        [EXCLUDE?] = 'NO'
+                        AND [IMPLANTS (ALL)] >= 15
+                        AND CONSISTENCY >= 6
+                        AND [ARC (R12)] >= 5
+                        AND [SURG (R12)] >= 2
+                )
+                AND STAGENAME = 'Revenue Recognized'
+        ) AS P
+    GROUP BY
+        SALES_CREDIT_REP_EMAIL,
+        JOIN_KEY
 )
 SELECT
     EID,
@@ -204,19 +252,20 @@ SELECT
     L2_PO,
     ISNULL(CS_DEDUCTION, 0) AS CS_DEDUCTION,
     IMPLANT_ACCEL_TRUE_UP,
-    TTL_PO - ISNULL(CS_DEDUCTION, 0) AS TTL_PO,
+    ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS PROGRAM_ACCEL_PO,
+    TTL_PO - ISNULL(CS_DEDUCTION, 0) + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS TTL_PO,
     IMPLANT_UNITS,
     REVENUE_UNITS,
     QTD_IMPL_REV_RATIO,
     YTD_IMPL_REV_RATIO,
     ISNULL(G.PO_AMT, 0) AS GAURANTEE_AMT,
     CASE
-        WHEN ISNULL(G.PO_AMT, 0) > TTL_PO THEN G.PO_AMT - TTL_PO
+        WHEN ISNULL(G.PO_AMT, 0) > TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) THEN G.PO_AMT - TTL_PO
         ELSE 0
     END AS GAURANTEE_ADJ,
     CASE
-        WHEN ISNULL(G.PO_AMT, 0) > TTL_PO THEN G.PO_AMT
-        ELSE TTL_PO - ISNULL(CS_DEDUCTION, 0)
+        WHEN ISNULL(G.PO_AMT, 0) > TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) THEN G.PO_AMT
+        ELSE TTL_PO - ISNULL(CS_DEDUCTION, 0) + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
     END AS PO_AMT
     /******/
     -- INTO tmpTM_PO
@@ -230,5 +279,7 @@ FROM
     LEFT JOIN qryRoster R ON R.REP_EMAIL = DETAIL.EID
     AND R.[isLATEST?] = 1
     AND R.ROLE = 'REP'
+    LEFT JOIN PRGRM_ACCEL ON PRGRM_ACCEL.JOIN_KEY = DETAIL.YYYYMM
+    AND PRGRM_ACCEL.SALES_CREDIT_REP_EMAIL = DETAIL.EID
 WHERE
     DETAIL.YYYYMM = @YYYYMM
