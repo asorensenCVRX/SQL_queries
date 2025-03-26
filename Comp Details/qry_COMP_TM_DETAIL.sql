@@ -153,7 +153,10 @@ OPPS AS (
     WHERE
         OPP_STATUS = 'CLOSED'
         AND SHIPPINGCOUNTRYCODE = 'US'
-        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+        AND INDICATION_FOR_USE__C IN (
+            'Heart Failure - Reduced Ejection Fraction',
+            'Hypertension'
+        )
         AND (
             CLOSE_YYYY = 2025
             OR IMPLANTED_YYYY = 2025
