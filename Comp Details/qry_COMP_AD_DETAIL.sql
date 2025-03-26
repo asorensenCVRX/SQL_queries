@@ -137,7 +137,6 @@ FROM
                 WHEN QTD_SALES_COMMISSIONABLE >= THRESHOLD THEN QTD_SALES_COMMISSIONABLE - THRESHOLD
                 ELSE NULL
             END AS L2_REV
-            /* add L1, L2, L3 rev then L1, L2, L3 PO */
         FROM
             (
                 SELECT
@@ -174,7 +173,7 @@ FROM
                     [L1 Rate],
                     [L2 Rate],
                     SUM(ISNULL(SALES_COMMISSIONABLE, 0)) OVER (
-                        PARTITION BY ROSTER.RM_EMAIL,
+                        PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
                         OPPS.CLOSE_YYYYQQ
                         ORDER BY
                             OPPS.CLOSEDATE,
@@ -182,14 +181,14 @@ FROM
                     ) AS QTD_SALES_COMMISSIONABLE,
                     /* make sure implants are only counted based on impl date, not closedate */
                     SUM(ISNULL(IMPLANT_UNITS, 0)) OVER(
-                        PARTITION BY ROSTER.RM_EMAIL,
+                        PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
                         OPPS.IMPLANTED_YYYYQQ
                         ORDER BY
                             ISNULL(OPPS.IMPLANTED_DT, OPPS.CLOSEDATE),
                             OPPS.NAME
                     ) AS QTD_IMPLANT_UNITS,
                     SUM(ISNULL(REVENUE_UNITS, 0)) OVER(
-                        PARTITION BY ROSTER.RM_EMAIL,
+                        PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
                         OPPS.CLOSE_YYYYQQ
                         ORDER BY
                             OPPS.CLOSEDATE,
