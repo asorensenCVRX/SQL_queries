@@ -325,11 +325,11 @@ B AS (
                             FROM
                                 (
                                     SELECT
-                                        ACCOUNT_INDICATION__C [Account],
+                                        A.NAME [Account],
                                         ACT_ID,
-                                        NAME [OPP],
+                                        O.NAME [OPP],
                                         STAGENAME,
-                                        DHC_IDN_NAME__C [IDN],
+                                        O.DHC_IDN_NAME__C [IDN],
                                         RECORD_TYPE,
                                         dbo.ConvertToTitleCase(ACT_OWNER_REGION) ACT_OWNER_REGION,
                                         ACT_OWNER_NAME,
@@ -344,7 +344,8 @@ B AS (
                                         CLOSE_YYYYQQ [YYYYQQ],
                                         'REV' [DATA_SET]
                                     FROM
-                                        tmpOpps
+                                        tmpOpps O
+                                        LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
                                     WHERE
                                         OPP_COUNTRY = 'US'
                                         AND STAGENAME = 'REVENUE RECOGNIZED'
@@ -352,11 +353,11 @@ B AS (
                                     UNION
                                     ALL
                                     SELECT
-                                        ACCOUNT_INDICATION__C [Account],
+                                        A.NAME [Account],
                                         ACT_ID,
-                                        NAME [OPP],
+                                        O.NAME [OPP],
                                         STAGENAME,
-                                        DHC_IDN_NAME__C [IDN],
+                                        O.DHC_IDN_NAME__C [IDN],
                                         RECORD_TYPE,
                                         dbo.ConvertToTitleCase(ACT_OWNER_REGION) ACT_OWNER_REGION,
                                         ACT_OWNER_NAME,
@@ -371,7 +372,7 @@ B AS (
                                         IMPLANTED_YYYYQQ,
                                         'IMP' [DATA_SET]
                                     FROM
-                                        tmpOpps
+                                        tmpOpps O LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
                                     WHERE
                                         OPP_COUNTRY = 'US'
                                         AND OPP_STATUS = 'CLOSED'
@@ -436,7 +437,7 @@ B AS (
                             FROM
                                 (
                                     SELECT
-                                        ACCOUNT_INDICATION__C [Account],
+                                        A.NAME [Account],
                                         ACT_ID,
                                         SURGEON,
                                         o.SURGEON_ID,
@@ -445,6 +446,7 @@ B AS (
                                     FROM
                                         tmpOpps O
                                         LEFT JOIN qryCalendar C ON o.IMPLANTED_DT = c.dt
+                                        LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
                                     WHERE
                                         OPP_COUNTRY = 'US'
                                         AND OPP_STATUS = 'CLOSED'
@@ -460,7 +462,7 @@ B AS (
                                                 dt = cast(getdate() AS date)
                                         )
                                     GROUP BY
-                                        ACCOUNT_INDICATION__C,
+                                        A.NAME,
                                         ACT_ID,
                                         SURGEON,
                                         o.SURGEON_ID
