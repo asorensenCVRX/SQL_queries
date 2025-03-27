@@ -257,7 +257,27 @@ FROM
                     STAGENAME,
                     ISNULL(ISIMPL, 0) AS ISIMPL,
                     ISNULL(IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
+                    CASE
+                        WHEN INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' THEN ISNULL(IMPLANT_UNITS, 0)
+                        ELSE 0
+                    END AS IMPLANT_UNITS_FOR_RATIO,
                     ISNULL(REVENUE_UNITS, 0) AS REVENUE_UNITS,
+                    CASE
+                        WHEN INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' THEN CASE
+                            WHEN DHC_IDN_NAME__C IN (
+                                'HCA Healthcare',
+                                'Department of Veterans Affairs'
+                            )
+                            AND IMPLANT_UNITS <> 0 THEN 1
+                            WHEN DHC_IDN_NAME__C IN (
+                                'HCA Healthcare',
+                                'Department of Veterans Affairs'
+                            )
+                            AND IMPLANT_UNITS = 0 THEN 0
+                            ELSE ISNULL(REVENUE_UNITS, 0)
+                        END
+                        ELSE 0
+                    END AS REV_UNITS_FOR_RATIO,
                     ISNULL(SALES, 0) AS SALES,
                     ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
                     CASE

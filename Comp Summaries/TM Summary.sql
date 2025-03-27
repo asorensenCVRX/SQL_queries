@@ -100,59 +100,59 @@ WITH DETAIL AS (
                 SUM(
                     CASE
                         WHEN IMPLANTED_YYYYQQ = @YYYYQQ
-                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN IMPLANT_UNITS
+                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN IMPLANT_UNITS_FOR_RATIO
                         ELSE 0
                     END
                 ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS QTD_IMPLANT_UNITS,
                 -- QTD rev units
                 --HCA/VA rev units do not count towards the ratio on their own (this is unfair to the rep
                 --because the sold units might be implanted in a different territory). Instead, each implant 
-                --for an HCA/VA account automatically also credits 1 revenue unit to the ratio.
+                --adds 1 implant unit and 1 revenue unit
                 SUM(
                     CASE
+                        WHEN DHC_IDN_NAME__C IN (
+                            'HCA Healthcare',
+                            'Department of Veterans Affairs'
+                        )
+                        AND IMPLANTED_YYYYQQ = @YYYYQQ
+                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN REV_UNITS_FOR_RATIO
                         WHEN CLOSE_YYYYQQ = @YYYYQQ
-                        AND CLOSE_YYYYMM <= @YYYYMM THEN CASE
-                            WHEN DHC_IDN_NAME__C IN (
+                        AND CLOSE_YYYYMM <= @YYYYMM
+                        AND (
+                            DHC_IDN_NAME__C NOT IN (
                                 'HCA Healthcare',
                                 'Department of Veterans Affairs'
                             )
-                            AND IMPLANT_UNITS <> 0 THEN 1
-                            WHEN DHC_IDN_NAME__C IN (
-                                'HCA Healthcare',
-                                'Department of Veterans Affairs'
-                            )
-                            AND IMPLANT_UNITS = 0 THEN 0
-                            ELSE REVENUE_UNITS
-                        END
-                        ELSE 0
+                            OR DHC_IDN_NAME__C IS NULL
+                        ) THEN REV_UNITS_FOR_RATIO
                     END
                 ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS QTD_REV_UNITS,
                 -- YTD implant units
                 SUM(
                     CASE
                         WHEN YEAR(IMPLANTED_DT) = 2025
-                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN IMPLANT_UNITS
+                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN IMPLANT_UNITS_FOR_RATIO
                         ELSE 0
                     END
                 ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS YTD_IMPLANT_UNITS,
                 -- YTD rev units
                 SUM(
                     CASE
+                        WHEN DHC_IDN_NAME__C IN (
+                            'HCA Healthcare',
+                            'Department of Veterans Affairs'
+                        )
+                        AND YEAR(IMPLANTED_DT) = 2025
+                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN REV_UNITS_FOR_RATIO
                         WHEN YEAR(CLOSEDATE) = 2025
-                        AND CLOSE_YYYYMM <= @YYYYMM THEN CASE
-                            WHEN DHC_IDN_NAME__C IN (
+                        AND CLOSE_YYYYMM <= @YYYYMM
+                        AND (
+                            DHC_IDN_NAME__C NOT IN (
                                 'HCA Healthcare',
                                 'Department of Veterans Affairs'
                             )
-                            AND IMPLANT_UNITS <> 0 THEN 1
-                            WHEN DHC_IDN_NAME__C IN (
-                                'HCA Healthcare',
-                                'Department of Veterans Affairs'
-                            )
-                            AND IMPLANT_UNITS = 0 THEN 0
-                            ELSE REVENUE_UNITS
-                        END
-                        ELSE 0
+                            OR DHC_IDN_NAME__C IS NULL
+                        ) THEN REV_UNITS_FOR_RATIO
                     END
                 ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS YTD_REV_UNITS,
                 MAX(QTD_SALES_COMISSIONABLE) OVER (
