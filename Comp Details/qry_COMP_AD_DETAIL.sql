@@ -43,6 +43,9 @@ ALIGNMENT AS (
         qryRoster
     WHERE
         role = 'REP'
+        OR
+        /* CS REPS WITH ACCOUNTS */
+        REP_EMAIL IN ('ycruea@cvrx.com', 'jobrien@cvrx.com')
 ),
 OPPS AS (
     SELECT
@@ -198,10 +201,10 @@ FROM
                     ROSTER
                     RIGHT JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
                     AND ROSTER.YYYYMM = OPPS.CLOSE_YYYYMM
-                    LEFT JOIN QUOTA ON RM_EMAIL = QUOTA.EID
-                    AND OPPS.CLOSE_YYYYQQ = QUOTA.YYYYQQ
-                    LEFT JOIN tblRates_RM R ON R.REGION_ID = ROSTER.REGION_ID
                     LEFT JOIN ALIGNMENT ON ALIGNMENT.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
+                    LEFT JOIN tblRates_RM R ON R.REGION_ID = ISNULL(ROSTER.REGION_ID, ALIGNMENT.REGION_ID)
+                    LEFT JOIN QUOTA ON ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL) = QUOTA.EID
+                    AND OPPS.CLOSE_YYYYQQ = QUOTA.YYYYQQ
             ) AS A
         WHERE
             CLOSE_YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')

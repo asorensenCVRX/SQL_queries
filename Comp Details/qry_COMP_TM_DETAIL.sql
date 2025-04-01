@@ -36,6 +36,8 @@ ALIGNMENT AS (
         qryRoster
     WHERE
         role = 'REP'
+        /* CS reps with accounts */
+        OR REP_EMAIL IN ('jobrien@cvrx.com', 'ycruea@cvrx.com')
 ),
 OPPS AS (
     SELECT
