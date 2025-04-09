@@ -10,8 +10,7 @@ WITH MonthlyImplants AS (
         OPP_COUNTRY = 'US'
         AND OPP_STATUS = 'CLOSED'
         AND ISIMPL = 1
-        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
-        AND REASON_FOR_IMPLANT__C = 'De novo'
+        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' -- AND REASON_FOR_IMPLANT__C = 'De novo'
 ),
 OrderedData AS (
     -- Step 2: Determine previous month for each account

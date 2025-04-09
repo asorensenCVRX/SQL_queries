@@ -1,5 +1,6 @@
 -- CREATE VIEW qryProgram_KPI as 
-/* CTE A and B were written by Jake in the DataSet Excel file */
+/* ALL METRICS TRACK ONLY HEART FAILURE -- DE NOVO EXCEPT CONSISTENCY (tracks all HF implants including replacements) */
+/* CTE A and B were written by Jake in the DataSet Excel file. */
 /* CTE CM brings in the data for the consistency metric */
 WITH A AS (
     SELECT
@@ -48,9 +49,6 @@ WITH A AS (
                 --       C.ID [SFDC_ID], 
                 ISNULL(B.NAME_REP, e.NAME_REP) AS [REP],
                 ISNULL(B.REGION, e.REGION) AS [REGION],
-                --   ISNULL(B.TERRITORY, 'Unassigned') AS [TERRITORY], 
-                --    ISNULL(ISNULL(ISNULL(ISNULL(ISNULL(ISNULL(C.OWNER_EMAIL, E.OWNER_EMAIL),C.REP_EMAIL), f.OWNER_EMAIL), g.OWNER_EMAIL), f2.OWNER_EMAIL), f3.OWNER_EMAIL) AS [REP_OWNER_EMAIL], 
-                -- C.[CSA ID], 
                 (c.cbsa + ' - ' + c.cbsa_name) [CBSA],
                 C.NAME,
                 c.id,
@@ -74,11 +72,6 @@ WITH A AS (
                     ) THEN '1'
                     ELSE 'Target'
                 END AS [STAGE],
-                --    C.CONTRACTING__C, 
-                --VALUE_ANALYSIS_INITIATED__C, 
-                --STAGE_NEW__C, 
-                --c.ISACU, 
-                --C.isAIC, 
                 dbo.ConvertToTitleCase(C.SHIPPINGCITY) + ', ' + c.SHIPPINGSTATECODE [CITY_STATE],
                 CAST(C.SHIPPINGPOSTALCODE AS VARCHAR) [ZIP_5],
                 ISNULL(
@@ -134,6 +127,7 @@ WITH A AS (
                     FROM
                         qryRoster_RM
                 ) B ON C.OWNER_EMAIL = B.REP_EMAIL
+                /* PATIENTS IN FUNNEL METRIC */
                 LEFT JOIN (
                     SELECT
                         ACT_ID,
@@ -148,6 +142,7 @@ WITH A AS (
                     GROUP BY
                         ACT_ID
                 ) H ON c.ID = H.ACT_ID
+                /**********************/
             WHERE
                 C.SHIPPINGCOUNTRY = 'USA' --AND (ISACU = 1 OR d.HF_CLAIMS_QTILE > 2 OR d.IDN_CONTRACT = 'Y')
                 AND (
@@ -352,6 +347,7 @@ B AS (
                                         AND REASON_FOR_IMPLANT__C = 'De novo'
                                     UNION
                                     ALL
+                                    /* find all-time implants */
                                     SELECT
                                         A.NAME [Account],
                                         ACT_ID,
@@ -372,12 +368,15 @@ B AS (
                                         IMPLANTED_YYYYQQ,
                                         'IMP' [DATA_SET]
                                     FROM
-                                        tmpOpps O LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
+                                        tmpOpps O
+                                        LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
                                     WHERE
                                         OPP_COUNTRY = 'US'
                                         AND OPP_STATUS = 'CLOSED'
                                         AND REASON_FOR_IMPLANT__C = 'De novo'
+                                        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
                                         AND ISIMPL = 1
+                                        /**************/
                                 ) AS M
                                 LEFT JOIN qryCalendar C ON M.DT = c.DT
                             GROUP BY
@@ -410,6 +409,7 @@ B AS (
                         AND OPP_STATUS = 'CLOSED'
                         AND ISIMPL = 1
                         AND REASON_FOR_IMPLANT__C = 'De novo'
+                        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
                     GROUP BY
                         ACT_ID
                 ) AS I ON ir.ACT_ID = i.ACT_ID
@@ -436,6 +436,7 @@ B AS (
                                 END AS [SURG_R6]
                             FROM
                                 (
+                                    /* Get implanters (de novo and HF only) */
                                     SELECT
                                         A.NAME [Account],
                                         ACT_ID,
@@ -452,6 +453,7 @@ B AS (
                                         AND OPP_STATUS = 'CLOSED'
                                         AND ISIMPL = 1
                                         AND REASON_FOR_IMPLANT__C = 'De novo'
+                                        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
                                         AND SURGEON_ID IS NOT NULL
                                         AND CLOSEDATE < (
                                             SELECT
@@ -528,6 +530,7 @@ CM AS (
     WHERE
         IMPLANT_YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
 ),
+-- blueprint data
 BP AS (
     SELECT
         Account__c,
@@ -600,7 +603,32 @@ SELECT
         ELSE 'No'
     END AS [Blueprint Completed?],
     BP.Blueprint_Type__c AS [Blueprint Type],
-    BP.ASD_Sign_Date__c AS [Blueprint Sign Date]
+    BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
+    CASE
+        WHEN ACT_ID IN (
+            SELECT
+                PARENT_ID
+            FROM
+                tblAct_Satellites
+        ) THEN 'Yes'
+        ELSE 'No'
+    END AS [HAS_SATELLITES?],
+    CASE
+        WHEN ACT_ID IN (
+            SELECT
+                CHILD_ID
+            FROM
+                tblAct_Satellites
+        ) THEN (
+            SELECT
+                PARENT_ID
+            FROM
+                tblAct_Satellites
+            WHERE
+                CHILD_ID = ACT_ID
+        )
+        ELSE NULL
+    END AS [PARENT_ID]
 FROM
     (
         SELECT
@@ -746,4 +774,4 @@ FROM
             ) AS Z
     ) AS Y
     LEFT JOIN CM ON Y.SFDC_ID = CM.ACT_ID
-    LEFT JOIN BP ON Y.SFDC_ID = BP.Account__c
+    LEFT JOIN BP ON Y.SFDC_ID = BP.Account__c;
