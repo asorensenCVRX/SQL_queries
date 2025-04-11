@@ -25,23 +25,10 @@ WITH DETAIL AS (
         SUM(L2_PO) AS L2_PO,
         /* only calc the implant accel true up if it's the last month of the quarter and
          impl_rev_ratio is >= 0.85 */
-        /*YOU MUST wrap these values in multiple layers of NULLIF and ISNULL. The innermost NULLIF and ISNULL
-         allows the equation to return values even for those who have had no revenue unit sales. The outer NULLIF and ISNULL
-         allows people who have had ONLY HCA/VA sales or implants to still be given a ratio.
-         EX. Andrew Hilovsky had only VA sales and implants in Q1. Since VA sales/implants DO NOT count towards your ratio,
-         he would have a ratio of 0, meaning he would not receive any IMPLANT_ACCEL_TRUE_UP, even though he had 3 implant units
-         and 3 revenue units. THEREFORE, ANYONE WITH A RATIO OF 0 IS DEFAULTED TO A RATIO OF 1. People with no implants/sales
-         will also receive a ratio of 1... but that doesn't matter, since there is nothing to true them up on.
-         */
+        /*The innermost NULLIF and ISNULL allows the equation to return values even for those who have had no revenue unit sales*/
         MAX(
             CASE
-                WHEN ISNULL(
-                    NULLIF(
-                        QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1),
-                        0
-                    ),
-                    1
-                ) >= 0.85
+                WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
                 AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES_COMMISSIONABLE
                 ELSE 0
             END
@@ -49,33 +36,15 @@ WITH DETAIL AS (
         SUM(L1_L2_PO) + (
             MAX(
                 CASE
-                    WHEN ISNULL(
-                        NULLIF(
-                            QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1),
-                            0
-                        ),
-                        1
-                    ) >= 0.85
+                    WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
                     AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES_COMMISSIONABLE
                     ELSE 0
                 END
             ) * 0.05
         ) AS TTL_PO,
         SUM(IMPLANT_UNITS) AS IMPLANT_UNITS,
-        ISNULL(
-            NULLIF(
-                MAX(QTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(QTD_REV_UNITS), 0), 1),
-                0
-            ),
-            1
-        ) AS QTD_IMPL_REV_RATIO,
-        ISNULL(
-            NULLIF(
-                MAX(YTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(YTD_REV_UNITS), 0), 1),
-                0
-            ),
-            1
-        ) AS YTD_IMPL_REV_RATIO,
+        MAX(QTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(QTD_REV_UNITS), 0), 1) AS QTD_IMPL_REV_RATIO,
+        MAX(YTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(YTD_REV_UNITS), 0), 1) AS YTD_IMPL_REV_RATIO,
         SUM(REVENUE_UNITS) AS REVENUE_UNITS
     FROM
         (
