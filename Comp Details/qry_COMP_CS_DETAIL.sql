@@ -12,7 +12,7 @@ WITH SALES AS (
             OR IMPLANTED_YYYY = '2025'
         )
         AND OPP_COUNTRY = 'US'
-        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+        -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
         AND OPP_STATUS = 'CLOSED'
         AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
