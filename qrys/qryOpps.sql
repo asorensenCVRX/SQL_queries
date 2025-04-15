@@ -3,17 +3,38 @@ WITH VA_HCA AS (
     /** use this to get ASP for VA and HCA accounts **/
     SELECT
         DHC_IDN_NAME__C,
-        SUM(SALES) [SALES_r12],
-        SUM(REVENUE_UNITS) [REV_UNITS_R12],
-        SUM(SALES) / SUM(REVENUE_UNITS) [ASP_r12]
+        SUM(O.IMPLANT_REVENUE__C) [SALES_r12],
+        SUM(
+            CASE
+                WHEN LEFT(O.OPPORTUNITY_REGION__C, 3) = 'EU ' THEN 0
+                WHEN O.IMPLANT_REVENUE__C = 0 THEN 0
+                WHEN O.REPLACEMENT_TYPE__C = 'CSL' THEN 0
+                WHEN ISNULL(O.EXPECTEDREVENUE, 0) < 0
+                AND ISNULL(O.EXPECTEDREVENUE, 0) > - 10000 THEN 0
+                ELSE TOTALOPPORTUNITYQUANTITY
+            END
+        ) [REV_UNITS_R12],
+        SUM(O.IMPLANT_REVENUE__C) / SUM(
+            CASE
+                WHEN LEFT(O.OPPORTUNITY_REGION__C, 3) = 'EU ' THEN 0
+                WHEN O.IMPLANT_REVENUE__C = 0 THEN 0
+                WHEN O.REPLACEMENT_TYPE__C = 'CSL' THEN 0
+                WHEN ISNULL(O.EXPECTEDREVENUE, 0) < 0
+                AND ISNULL(O.EXPECTEDREVENUE, 0) > - 10000 THEN 0
+                ELSE TOTALOPPORTUNITYQUANTITY
+            END
+        ) [ASP_r12]
     FROM
-        [tmpOpps]
+        [sfdcOpps] AS O
+        LEFT OUTER JOIN dbo.qryCust AS D ON O.ACCOUNTID = D.ID
     WHERE
         DHC_IDN_NAME__C IN (
             'Department of Veterans Affairs',
             'HCA Healthcare'
         )
-        AND CLOSE_YYYYMM IN (
+        AND TRIM(
+            CAST(YEAR(O.CLOSEDATE) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(O.CLOSEDATE) AS VARCHAR), 2)
+        ) IN (
             SELECT
                 DISTINCT YYYYMM
             FROM
@@ -21,7 +42,14 @@ WITH VA_HCA AS (
             WHERE
                 R12 = 'C12'
         )
-        AND OPP_STATUS = 'CLOSED'
+        AND (
+            O.STAGENAME IN (
+                'Revenue Recognized',
+                'Procedure recognized',
+                'Implant Completed'
+            )
+            OR ISCLOSED = 1
+        )
     GROUP BY
         DHC_IDN_NAME__C
 )
@@ -335,13 +363,19 @@ FROM
             a.OPPORTUNITY_INSURANCE_TYPE__C,
             A.ISCLOSED,
             A.NAME,
+            -- J2 is bringing in on A.SURGEON__C
             J2.NAME AS SURGEON,
             J2.SPECIALTY__C AS SURGEON_SPECIALTY,
             J2.ID AS SURGEON_ID,
+            --J is bringing in on A.PATIENTSREFERRINGDOC__C
             J.NAME AS PHYSICIAN,
             J.SPECIALTY__C AS PHYSICIAN_SPECIALTY,
             J.ID AS PHYSICIAN_ID,
             J.MDR_Target__C [isMDRTarget?],
+            -- J3 is bringing in on A.PRESCRIBER__C
+            J3.NAME AS PRESCRIBER,
+            J3.SPECIALTY__C AS PRESCRIBER_SPECIALTY,
+            J3.ID AS PRESCRIBER_ID,
             CASE
                 WHEN LEFT(A.OPPORTUNITY_REGION__C, 3) = 'EU ' THEN 0
                 WHEN E.NAME = 'Financial Opportunity' THEN 0
@@ -501,6 +535,7 @@ FROM
             ) AS I ON A.ID = I.OPPORTUNITYID
             LEFT OUTER JOIN dbo.sfdcContact AS J ON A.PATIENTSREFERRINGDOC__C = J.ID
             LEFT OUTER JOIN dbo.sfdcContact AS J2 ON h2.SURGEON__C = J2.ID
+            LEFT OUTER JOIN sfdcContact AS J3 ON A.PRESCRIBER__C = J3.ID
             LEFT OUTER JOIN dbo.qryCalendar AS TT ON CAST(A.CREATEDDATE AS DATE) = TT.DT
             LEFT OUTER JOIN dbo.qryCalendar AS TT3 ON ISNULL(H.PROCEDURE_DATE__C, A.CLOSEDATE) = TT3.DT
             LEFT OUTER JOIN dbo.qryUsers AS FF ON A.ACCOUNT_OWNER_AT_IMPLANT_COMPLETE__C = FF.ID
