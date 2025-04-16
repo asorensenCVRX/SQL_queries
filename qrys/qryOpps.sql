@@ -456,7 +456,9 @@ FROM
                 WHEN A.STAGENAME = 'Cancelled' THEN 0
                 ELSE 1
             END AS ISIMPL,
-            A.LASTMODIFIEDDATE
+            A.LASTMODIFIEDDATE,
+            A.PROBABILITY,
+            A.PROCEDURE_CODING__C
         FROM
             dbo.sfdcOpps AS A
             LEFT JOIN (
