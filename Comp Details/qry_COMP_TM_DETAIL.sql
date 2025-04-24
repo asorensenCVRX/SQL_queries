@@ -166,6 +166,47 @@ OPPS AS (
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
         /* Must keep both 'Revenue Recognized' and 'Implant Completed' to calc CS deductions */
         AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
+        /* Bring in t-splits */
+    UNION
+    ALL
+    SELECT
+        CLOSEDATE,
+        CLOSE_YYYYMM,
+        CLOSE_YYYYQQ,
+        IMPLANTED_DT,
+        IMPLANTED_YYYYMM,
+        IMPLANTED_YYYYQQ,
+        NULL,
+        ACCOUNT_INDICATION__C,
+        ACT_ID,
+        ACT_OWNER_EMAIL,
+        OPP_OWNER_EMAIL,
+        OPP_ID,
+        [NAME],
+        PHYSICIAN,
+        PHYSICIAN_ID,
+        OG_OWNER,
+        NULL,
+        NULL,
+        'T-Split' AS COVERAGE_TYPE,
+        INDICATION_FOR_USE__C,
+        REASON_FOR_IMPLANT__C,
+        NULL AS STAGENAME,
+        ISIMPL,
+        0 AS IMPLANT_UNITS,
+        0 AS REVENUE_UNITS,
+        OG_OWNER_SALES_CREDIT,
+        OG_OWNER_SALES_CREDIT,
+        NULL,
+        ASP,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+    FROM
+        qryTerritory_Split
+    WHERE
+        YEAR(CLOSEDATE) = 2025
 ),
 QUOTA AS (
     SELECT

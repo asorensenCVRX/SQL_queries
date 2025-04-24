@@ -17,7 +17,16 @@ WITH DETAIL AS (
         YYYYQQ,
         THRESHOLD,
         [PLAN],
-        SUM(SALES_COMMISSIONABLE) AS SALES,
+        SUM(
+            CASE
+                WHEN COVERAGE_TYPE <> 'T-SPLIT' THEN SALES_COMMISSIONABLE
+            END
+        ) AS SALES,
+        SUM(
+            CASE
+                WHEN COVERAGE_TYPE = 'T-SPLIT' THEN SALES_COMMISSIONABLE
+            END
+        ) AS T_SPLIT_SALES,
         MAX(QTD_SALES_COMMISSIONABLE) AS QTD_SALES,
         SUM(L1_REV) AS L1_REV,
         SUM(L2_REV) AS L2_REV,
@@ -51,6 +60,7 @@ WITH DETAIL AS (
             SELECT
                 SALES_CREDIT_REP_EMAIL AS EID,
                 NAME_REP,
+                COVERAGE_TYPE,
                 REGION_NM,
                 CLOSE_YYYYMM AS YYYYMM,
                 CLOSE_YYYYQQ AS YYYYQQ,
@@ -214,6 +224,7 @@ SELECT
     THRESHOLD,
     [PLAN],
     SALES,
+    T_SPLIT_SALES,
     QTD_SALES,
     L1_REV,
     L2_REV,
