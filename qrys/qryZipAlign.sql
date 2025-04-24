@@ -12,11 +12,15 @@ FROM
     tblZipAlign Z
     LEFT JOIN (
         SELECT
-            *
+            *,
+            ROW_NUMBER() OVER (
+                PARTITION BY TERRITORY_ID
+                ORDER BY
+                    ISNULL(DOT, '2099-12-31') DESC
+            ) AS NUM
         FROM
             qryRoster
         WHERE
             ROLE NOT IN ('FCE', 'MDR')
-            AND [isLATEST?] = 1
-            AND [STATUS] = 'ACTIVE'
     ) R ON Z.TERR_ID = R.TERRITORY_ID
+    AND NUM = 1
