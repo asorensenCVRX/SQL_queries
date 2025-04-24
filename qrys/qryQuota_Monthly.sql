@@ -63,3 +63,9 @@ FROM
     LEFT JOIN qryRoster R ON RATES.EID = R.REP_EMAIL
     AND R.[isLATEST?] = 1
     AND R.ROLE = 'REP'
+    AND REP_EMAIL NOT IN (
+        SELECT
+            EMP_EMAIL
+        FROM
+            qryRoster_RM
+    )
