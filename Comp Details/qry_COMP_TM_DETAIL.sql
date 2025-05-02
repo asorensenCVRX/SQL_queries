@@ -19,7 +19,10 @@ WITH ROSTER AS (
                 AND YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
-        ROLE = 'REP'
+        (
+            ROLE = 'REP'
+            OR REP_EMAIL IN ('ldasilvacampos@cvrx.com', 'ycruea@cvrx.com')
+        )
         /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
          or is null, and DOH is before or equal to last month. */
         AND FORMAT(ISNULL(DOT, '2099-12-13'), 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')

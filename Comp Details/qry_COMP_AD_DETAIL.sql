@@ -21,7 +21,10 @@ WITH ROSTER AS (
                 AND YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
-        ROLE = 'REP'
+        (
+            ROLE = 'REP'
+            OR REP_EMAIL IN ('ldasilvacampos@cvrx.com', 'ycruea@cvrx.com')
+        )
         AND (
             FORMAT(DOT, 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')
             OR DOT IS NULL
@@ -86,8 +89,7 @@ OPPS AS (
         AND AA.END_DT
     WHERE
         OPP_STATUS = 'CLOSED'
-        AND SHIPPINGCOUNTRYCODE = 'US'
-        -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+        AND SHIPPINGCOUNTRYCODE = 'US' -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         AND (
             CLOSE_YYYY = 2025
             OR IMPLANTED_YYYY = 2025
