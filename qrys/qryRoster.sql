@@ -120,7 +120,7 @@ FROM
         FROM
             dbo.tblTerritory
     ) AS BB ON A.TERRITORY_ID = BB.REGION_ID
-    AND A.ROLE = 'FCE'
+    AND A.ROLE IN ('FCE', 'ATM')
     /* REGION JOINS --*/
     LEFT OUTER JOIN dbo.tblRoster AS C ON B.REGION_ID = C.TERRITORY_ID
     AND C.ROLE = 'RM'
@@ -146,4 +146,4 @@ FROM
     AND A.ROLE = 'REP'
     LEFT JOIN tblFCE_COMP F ON A.EMP_EMAIL = f.FCE_EMAIL
 WHERE
-    (A.ROLE IN ('FCE', 'REP', 'MDR'));
+    (A.ROLE IN ('FCE', 'REP', 'MDR', 'ATM'));
