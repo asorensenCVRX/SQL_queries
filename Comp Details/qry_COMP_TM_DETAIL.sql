@@ -44,7 +44,9 @@ ALIGNMENT AS (
 ),
 OPPS AS (
     SELECT
-        CLOSEDATE,
+        /* DISTINCT must be included so that if a CS has an account target and a physician target that overlap on an opp
+         they are not double counted. */
+        DISTINCT CLOSEDATE,
         CLOSE_YYYYMM,
         CLOSE_YYYYQQ,
         IMPLANTED_DT,
