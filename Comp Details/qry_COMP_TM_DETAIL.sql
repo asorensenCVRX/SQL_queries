@@ -155,6 +155,8 @@ OPPS AS (
             WHEN T.PO_TYPE = 'implant' THEN O.ISIMPL
             WHEN T.PO_TYPE = 'revenue' THEN O.REVENUE_UNITS
         END >= 1
+        /* targets are only paid on de novo */
+        AND REASON_FOR_IMPLANT__C = 'De novo'
         /* bring in tblSalesSplits so credit for opps can be shared */
         LEFT JOIN tblSalesSplits S ON O.OPP_ID = S.OPP_ID
     WHERE
