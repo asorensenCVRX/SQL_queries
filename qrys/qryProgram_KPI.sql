@@ -31,6 +31,7 @@ WITH A AS (
         M.REIMBURSEMENT_QTILE,
         M.[MEDICARE_%],
         M.REP,
+        M.REP_EMAIL,
         M.REGION,
         M.[Definitive ID],
         M.PROVIDER_ID,
@@ -48,6 +49,7 @@ WITH A AS (
                 CAST(C.CMS_ID__C AS VARCHAR) AS [PROVIDER_ID],
                 --       C.ID [SFDC_ID], 
                 ISNULL(B.NAME_REP, e.NAME_REP) AS [REP],
+                ISNULL(B.REP_EMAIL, E.REP_EMAIL) AS [REP_EMAIL],
                 ISNULL(B.REGION, e.REGION) AS [REGION],
                 (c.cbsa + ' - ' + c.cbsa_name) [CBSA],
                 C.NAME,
@@ -159,6 +161,7 @@ WITH A AS (
                 CAST(t.[Provider Number] AS VARCHAR) [Provider Number],
                 --       '' AS [SFDC_ID], 
                 ISNULL(E.NAME_REP, 'Unassigned') AS [REP],
+                ISNULL(E.REP_EMAIL, 'Unassigned') AS [REP_EMAIL],
                 ISNULL(E.REGION, 'Unassigned') AS [REGION],
                 --     ISNULL(B.TERRITORY, 'Unassigned') AS [TERRITORY], 
                 -- ISNULL(ISNULL(ISNULL(ISNULL(E.OWNER_EMAIL, f.OWNER_EMAIL), g.OWNER_EMAIL), f2.OWNER_EMAIL), f3.OWNER_EMAIL) AS [REP_OWNER_EMAIL], 
@@ -476,6 +479,7 @@ B AS (
                         S.ACT_ID
                 ) AS S ON IR.ACT_ID = S.ACT_ID
                 LEFT OUTER JOIN (
+                    /* get all referrers (de novo and HF only) */
                     SELECT
                         T.ACT_ID,
                         ACCT,
@@ -504,6 +508,7 @@ B AS (
                                 tmpARC
                             WHERE
                                 IMPLANT_UNITS <> 0
+                                AND YYYYMM < FORMAT(GETDATE(), 'yyyy_MM')
                         ) AS T
                     WHERE
                         ROW = 1
@@ -646,6 +651,7 @@ FROM
             X.[REIMBURSEMENT_QTILE],
             X.[MEDICARE_%],
             X.ACT_OWNER,
+            X.REP_EMAIL,
             X.REP,
             X.REGION,
             CASE
@@ -724,6 +730,7 @@ FROM
                     A.REIMBURSEMENT_QTILE,
                     A.[MEDICARE_%],
                     ISNULL(A.REP, B.ACT_OWNER_NAME) AS ACT_OWNER,
+                    A.REP_EMAIL,
                     A.REP,
                     A.REGION,
                     CAST(
