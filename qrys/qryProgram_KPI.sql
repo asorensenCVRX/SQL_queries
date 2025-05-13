@@ -539,6 +539,7 @@ CM AS (
 BP AS (
     SELECT
         Account__c,
+        ID AS BP_ID,
         Blueprint_Type__c,
         Status__c,
         ASD_Sign_Date__c
@@ -609,6 +610,15 @@ SELECT
     END AS [Blueprint Completed?],
     BP.Blueprint_Type__c AS [Blueprint Type],
     BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
+    BP.BP_ID AS BLUEPRINT_ID,
+    CASE
+        WHEN BP_ID IS NULL THEN NULL
+        ELSE CONCAT(
+            'https://cvrx.lightning.force.com/lightning/r/Blueprint__c/',
+            BP_ID,
+            '/view'
+        )
+    END AS BLUEPRINT_LINK,
     CASE
         WHEN ACT_ID IN (
             SELECT
