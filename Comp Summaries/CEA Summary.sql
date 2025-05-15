@@ -1,0 +1,112 @@
+DECLARE @PREV_MONTH VARCHAR(7) = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM');
+
+
+DECLARE @PREV_MONTH_QTR VARCHAR(7) = CONCAT(
+    FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy'),
+    '_Q',
+    DATEPART(QUARTER, DATEADD(MONTH, -1, GETDATE()))
+);
+
+
+DECLARE @L1_THRESHOLD MONEY = 47166000;
+
+
+DECLARE @L2_THRESHOLD MONEY = 62013000;
+
+
+WITH R AS (
+    SELECT
+        @PREV_MONTH AS YYYYMM,
+        REP_EMAIL,
+        NAME_REP
+    FROM
+        qryRoster
+    WHERE
+        [isLATEST?] = 1
+        AND [ROLE] = 'CEA'
+),
+REV AS (
+    SELECT
+        -- SUM(SALES) AS YTD_SALES,
+        SUM(SALES_COMMISSIONABLE) AS YTD_SALES_COMMISSIONABLE,
+        -- SUM(
+        --     CASE
+        --         WHEN CLOSE_YYYYMM = @PREV_MONTH THEN SALES
+        --     END
+        -- ) AS SALES,
+        SUM(
+            CASE
+                WHEN CLOSE_YYYYMM = @PREV_MONTH THEN SALES_COMMISSIONABLE
+            END
+        ) AS SALES_COMMISSIONABLE,
+        -- SUM(IMPLANT_UNITS) AS YTD_IMPLANT_UNITS,
+        SUM(IMPLANT_UNITS_FOR_RATIO) AS YTD_IMPLANT_UNITS_FOR_RATIO,
+        -- SUM(REVENUE_UNITS) AS YTD_REVENUE_UNITS,
+        SUM(REV_UNITS_FOR_RATIO) AS YTD_REV_UNITS_FOR_RATIO,
+        SUM(
+            CASE
+                WHEN CLOSE_YYYYQQ = @PREV_MONTH_QTR THEN IMPLANT_UNITS_FOR_RATIO
+            END
+        ) AS Q0_IMPLANT_UNITS_FOR_RATIO,
+        SUM(
+            CASE
+                WHEN CLOSE_YYYYQQ = @PREV_MONTH_QTR THEN REV_UNITS_FOR_RATIO
+            END
+        ) AS Q0_REV_UNITS_FOR_RATIO
+    FROM
+        qry_COMP_TM_DETAIL
+    WHERE
+        COVERAGE_TYPE IN ('Normal', 'Ownership Override', 'Open Territory')
+        AND YEAR(CLOSEDATE) = 2025
+        AND CLOSE_YYYYMM <= @PREV_MONTH
+),
+TOTALS AS (
+    SELECT
+        *,
+        L1_REV * 0.00225 AS L1_PO,
+        L2_REV * 0.0045 AS L2_PO,
+        L3_REV * 0.018 AS L3_PO,
+        Q0_IMPLANT_UNITS_FOR_RATIO / Q0_REV_UNITS_FOR_RATIO AS Q0_RATIO,
+        CASE
+            WHEN @PREV_MONTH IN ('2025_03', '2025_06', '2025_09', '2025_12')
+            AND Q0_IMPLANT_UNITS_FOR_RATIO / Q0_REV_UNITS_FOR_RATIO >= 0.85 THEN 6500
+            ELSE 0
+        END AS EOQ_RATIO_PAYOUT
+    FROM
+        (
+            SELECT
+                R.*,
+                @L1_THRESHOLD AS L1_FY_THRESHOLD,
+                @L2_THRESHOLD AS L2_FY_THRESHOLD,
+                -- YTD_SALES,
+                YTD_SALES_COMMISSIONABLE,
+                -- SALES,
+                SALES_COMMISSIONABLE,
+                CASE
+                    WHEN YTD_SALES_COMMISSIONABLE < @L1_THRESHOLD THEN SALES_COMMISSIONABLE
+                    WHEN YTD_SALES_COMMISSIONABLE - SALES_COMMISSIONABLE < @L1_THRESHOLD THEN @L1_THRESHOLD - (YTD_SALES_COMMISSIONABLE - SALES_COMMISSIONABLE)
+                    ELSE 0
+                END AS L1_REV,
+                CASE
+                    WHEN YTD_SALES_COMMISSIONABLE BETWEEN @L1_THRESHOLD
+                    AND @L2_THRESHOLD THEN YTD_SALES_COMMISSIONABLE - @L1_THRESHOLD
+                    ELSE 0
+                END AS L2_REV,
+                CASE
+                    WHEN YTD_SALES_COMMISSIONABLE > @L2_THRESHOLD THEN YTD_SALES_COMMISSIONABLE - @L2_THRESHOLD
+                    ELSE 0
+                END AS L3_REV,
+                YTD_IMPLANT_UNITS_FOR_RATIO,
+                YTD_REV_UNITS_FOR_RATIO,
+                Q0_IMPLANT_UNITS_FOR_RATIO,
+                Q0_REV_UNITS_FOR_RATIO
+            FROM
+                R
+                CROSS JOIN REV
+        ) AS T
+)
+SELECT
+    *,
+    L1_PO + L2_PO + L3_PO + EOQ_RATIO_PAYOUT AS PO_AMT
+FROM
+    TOTALS
