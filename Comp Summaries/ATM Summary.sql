@@ -20,7 +20,7 @@ FROM
 SET
     @sql = N'SELECT
     * 
-    --INTO tmpATM_PO
+    -- INTO tmpATM_PO
 FROM
     (
         SELECT

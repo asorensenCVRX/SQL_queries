@@ -108,5 +108,8 @@ TOTALS AS (
 SELECT
     *,
     L1_PO + L2_PO + L3_PO + EOQ_RATIO_PAYOUT AS PO_AMT
+    /******/
+    -- INTO tmpCEA_PO
+    /******/
 FROM
     TOTALS
