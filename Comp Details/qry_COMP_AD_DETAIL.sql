@@ -21,10 +21,7 @@ WITH ROSTER AS (
                 AND YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
-        (
-            ROLE = 'REP'
-            OR REP_EMAIL IN ('ldasilvacampos@cvrx.com', 'ycruea@cvrx.com')
-        )
+        ROLE IN ('REP', 'FCE')
         AND (
             FORMAT(DOT, 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')
             OR DOT IS NULL
@@ -45,10 +42,8 @@ ALIGNMENT AS (
     FROM
         qryRoster
     WHERE
-        role = 'REP'
-        OR
-        /* CS REPS WITH ACCOUNTS */
-        REP_EMAIL IN ('ycruea@cvrx.com', 'jobrien@cvrx.com')
+        role IN ('REP', 'FCE')
+        AND [isLATEST?] = 1
 ),
 OPPS AS (
     SELECT
