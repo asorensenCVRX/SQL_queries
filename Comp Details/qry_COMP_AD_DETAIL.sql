@@ -42,7 +42,7 @@ ALIGNMENT AS (
     FROM
         qryRoster
     WHERE
-        role IN ('REP', 'FCE')
+        role IN ('REP', 'FCE', 'ATM')
         AND [isLATEST?] = 1
 ),
 OPPS AS (
@@ -97,16 +97,38 @@ QUOTA AS (
         YYYYQQ,
         TERRITORY_ID,
         EID,
+        START_DT,
         SUM(THRESHOLD) AS THRESHOLD,
         SUM([PLAN]) AS [PLAN]
     FROM
-        qryQuota_Monthly
-    WHERE
-        TERRITORY_ID NOT LIKE '%OFF%'
+        (
+            SELECT
+                YYYYMM,
+                YYYYQQ,
+                Q.TERRITORY_ID,
+                EID,
+                CASE
+                    WHEN YYYYMM < FORMAT(START_DT, 'yyyy_MM') THEN 0
+                    ELSE THRESHOLD
+                END AS THRESHOLD,
+                CASE
+                    WHEN YYYYMM < FORMAT(START_DT, 'yyyy_MM') THEN 0
+                    ELSE [PLAN]
+                END AS [PLAN],
+                FNAME,
+                LNAME,
+                [NAME],
+                REGION,
+                START_DT
+            FROM
+                qryQuota_Monthly Q
+                INNER JOIN qryRoster_RM R ON Q.EID = R.EMP_EMAIL
+        ) AS A
     GROUP BY
         YYYYQQ,
         TERRITORY_ID,
-        EID
+        EID,
+        START_DT
 )
 SELECT
     *,
@@ -172,7 +194,15 @@ FROM
                     QUOTA.[PLAN],
                     [L1 Rate],
                     [L2 Rate],
-                    SUM(ISNULL(SALES_COMMISSIONABLE, 0)) OVER (
+                    SUM(
+                        ISNULL(
+                            CASE
+                                WHEN CLOSE_YYYYMM < FORMAT(QUOTA.START_DT, 'yyyy_MM') THEN 0
+                                ELSE SALES_COMMISSIONABLE
+                            END,
+                            0
+                        )
+                    ) OVER (
                         PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
                         OPPS.CLOSE_YYYYQQ
                         ORDER BY
