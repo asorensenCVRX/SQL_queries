@@ -44,6 +44,14 @@ SELECT
                 EMP_EMAIL
             FROM
                 qryRoster_RM
+        )
+        AND A.ST_DT >= (
+            SELECT
+                START_DT
+            FROM
+                qryRoster_RM R
+            WHERE
+                A.OWNER_EMAIL = R.EMP_EMAIL
         ) THEN 'Open Territory'
         ELSE ISNULL(E.COVERAGE_TYPE, 'Normal')
     END AS COVERAGE_TYPE
@@ -71,3 +79,9 @@ FROM
     LEFT JOIN tblAct_Exceptions E ON A.ACT_ID = E.SFDC_ID
     AND A.REP_TERR_ID = E.TERR_ID
     AND A.REP_TERR_ID <> Z.TERR_ID
+    AND (
+        A.ST_DT BETWEEN ISNULL(E.[START], '2025-01-01')
+        AND ISNULL(E.[END], '2099-12-31')
+        OR END_DT BETWEEN ISNULL(E.[START], '2025-01-01')
+        AND ISNULL(E.[END], '2099-12-31')
+    )
