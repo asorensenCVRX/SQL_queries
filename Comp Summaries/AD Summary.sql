@@ -29,9 +29,17 @@ FROM
             SUM(L1_PO) AS L1_PO,
             SUM(L2_PO) AS L2_PO --add spiff po
         FROM
-            qry_COMP_ASD_DETAIL
+            qry_COMP_ASD_DETAIL C
         WHERE
             CLOSE_YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+            AND CLOSEDATE >= (
+                SELECT
+                    START_DT
+                FROM
+                    qryRoster_RM R
+                WHERE
+                    C.SALES_CREDIT_ASD_EMAIL = R.EMP_EMAIL
+            )
         GROUP BY
             CLOSE_YYYYMM,
             REGION_NM,

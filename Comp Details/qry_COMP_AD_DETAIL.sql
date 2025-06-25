@@ -109,10 +109,20 @@ QUOTA AS (
                 EID,
                 CASE
                     WHEN YYYYMM < FORMAT(START_DT, 'yyyy_MM') THEN 0
+                    WHEN FORMAT(START_DT, 'yyyy_MM') = YYYYMM THEN (
+                        CAST(
+                            (DAY(EOMONTH(START_DT)) - DAY(START_DT)) AS FLOAT
+                        ) / DAY(EOMONTH(START_DT))
+                    ) * THRESHOLD
                     ELSE THRESHOLD
                 END AS THRESHOLD,
                 CASE
                     WHEN YYYYMM < FORMAT(START_DT, 'yyyy_MM') THEN 0
+                    WHEN FORMAT(START_DT, 'yyyy_MM') = YYYYMM THEN (
+                        CAST(
+                            (DAY(EOMONTH(START_DT)) - DAY(START_DT)) AS FLOAT
+                        ) / DAY(EOMONTH(START_DT))
+                    ) * [PLAN]
                     ELSE [PLAN]
                 END AS [PLAN],
                 FNAME,
@@ -197,7 +207,7 @@ FROM
                     SUM(
                         ISNULL(
                             CASE
-                                WHEN CLOSE_YYYYMM < FORMAT(QUOTA.START_DT, 'yyyy_MM') THEN 0
+                                WHEN CLOSEDATE < QUOTA.START_DT THEN 0
                                 ELSE SALES_COMMISSIONABLE
                             END,
                             0
