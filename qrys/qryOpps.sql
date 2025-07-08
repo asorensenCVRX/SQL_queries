@@ -535,10 +535,13 @@ VA_HCA AS (
 SELECT
     A.*,
     CASE
-        WHEN VA_HCA.ASP_r12 IS NOT NULL
-        AND ISIMPL = 1 THEN VA_HCA.ASP_r12
-        WHEN VA_HCA.ASP_r12 IS NOT NULL
-        AND ISIMPL = 0 THEN 0
+        WHEN VA_HCA.ASP_r12 IS NOT NULL THEN CASE
+            WHEN ISIMPL = 1 THEN VA_HCA.ASP_r12
+            WHEN ISIMPL = 0 THEN CASE
+                WHEN REVENUE_UNITS = 0 THEN A.SALES
+                ELSE 0
+            END
+        END
         WHEN STAGENAME = 'Revenue Recognized'
         AND VA_HCA.ASP_r12 IS NULL THEN SALES
         ELSE 0
