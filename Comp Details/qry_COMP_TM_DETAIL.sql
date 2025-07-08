@@ -239,43 +239,50 @@ FROM
     (
         SELECT
             *,
+            /* If a rep's ACTIVE_YYYYMM is next month, but the rep has sales, ensure those sales are L1 revenue */
             CASE
-                /*Solve: if this sales is negative and we're still below threshold then sales  */
-                WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
-                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN SALES_COMMISSIONABLE
-                /*Solve: if were not currently above threshold then all Sales are in L1 still */
-                WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN ISNULL(SALES_COMMISSIONABLE, 0)
-                /*Solve:   if we were NOT already above threshold then return a portion/all of this sale up to threshold*/
-                WHEN (
-                    ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
-                ) <= THRESHOLD THEN THRESHOLD - (
-                    ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
-                )
-                ELSE 0
+                WHEN THRESHOLD = 0 THEN SALES_COMMISSIONABLE
+                ELSE CASE
+                    /*Solve: if this sales is negative and we're still below threshold then sales  */
+                    WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
+                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN SALES_COMMISSIONABLE
+                    /*Solve: if were not currently above threshold then all Sales are in L1 still */
+                    WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN ISNULL(SALES_COMMISSIONABLE, 0)
+                    /*Solve:   if we were NOT already above threshold then return a portion/all of this sale up to threshold*/
+                    WHEN (
+                        ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
+                    ) <= THRESHOLD THEN THRESHOLD - (
+                        ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
+                    )
+                    ELSE 0
+                END
             END AS L1_REV,
             CASE
-                /*Solve: if this sales is negative and we're currently l2 and previously were in l2 then sales  */
-                WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
-                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) > THRESHOLD
-                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN SALES_COMMISSIONABLE
-                /*Solve: if this sales is negative and we're no longer above threshold but we were before this line item then   */
-                WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
-                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) < THRESHOLD
-                AND ISNULL(
-                    QTD_SALES_COMISSIONABLE,
-                    0
-                ) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN (THRESHOLD - ISNULL(QTD_SALES_COMISSIONABLE, 0)) + ISNULL(SALES_COMMISSIONABLE, 0)
-                /*Solve: if we're already passed quota before this record OR sales is still below Q4BL at this line then 0 sales get passed. */
-                WHEN (ISNULL(QTD_SALES_COMISSIONABLE, 0)) <= THRESHOLD
-                OR ISNULL(SALES_COMMISSIONABLE, 0) = 0 THEN 0
-                /*Solve: if we were already at/passed threshold then sales */
-                WHEN (
-                    ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
-                ) > THRESHOLD
-                AND ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN SALES_COMMISSIONABLE
-                /*Solve: if we are now at/passed threshold and currently less than quota then take the sales over the threshold */
-                WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN ISNULL(QTD_SALES_COMISSIONABLE, 0) - THRESHOLD
-                ELSE NULL
+                WHEN THRESHOLD = 0 THEN 0
+                ELSE CASE
+                    /*Solve: if this sales is negative and we're currently l2 and previously were in l2 then sales  */
+                    WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
+                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) > THRESHOLD
+                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN SALES_COMMISSIONABLE
+                    /*Solve: if this sales is negative and we're no longer above threshold but we were before this line item then   */
+                    WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
+                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) < THRESHOLD
+                    AND ISNULL(
+                        QTD_SALES_COMISSIONABLE,
+                        0
+                    ) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN (THRESHOLD - ISNULL(QTD_SALES_COMISSIONABLE, 0)) + ISNULL(SALES_COMMISSIONABLE, 0)
+                    /*Solve: if we're already passed quota before this record OR sales is still below Q4BL at this line then 0 sales get passed. */
+                    WHEN (ISNULL(QTD_SALES_COMISSIONABLE, 0)) <= THRESHOLD
+                    OR ISNULL(SALES_COMMISSIONABLE, 0) = 0 THEN 0
+                    /*Solve: if we were already at/passed threshold then sales */
+                    WHEN (
+                        ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
+                    ) > THRESHOLD
+                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN SALES_COMMISSIONABLE
+                    /*Solve: if we are now at/passed threshold and currently less than quota then take the sales over the threshold */
+                    WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN ISNULL(QTD_SALES_COMISSIONABLE, 0) - THRESHOLD
+                    ELSE NULL
+                END
             END L2_REV,
             QTD_IMPLANT_UNITS / COALESCE(NULLIF(QTD_REVENUE_UNITS, 0), 1) AS QTD_IMPL_REV_RATIO
         FROM
