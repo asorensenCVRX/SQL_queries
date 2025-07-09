@@ -43,6 +43,10 @@ WITH qOpps AS (
                 A.NEXT_FOLLOW_UP_DATE__C,
                 A.SURGERY_DATE__C,
                 h2.PROCEDURE_DATE__C,
+                CASE
+                    WHEN h2.id IS NULL THEN 0
+                    ELSE 1
+                END AS [hasRelatedProcedure?],
                 A.ACCOUNTID AS ACT_ID,
                 A.OPPORTUNITY_REGION__C,
                 ISNULL(A.OPPORTUNITY_SOURCE__C, 'N/A') AS OPPORTUNITY_SOURCE__C,
@@ -277,7 +281,7 @@ WITH qOpps AS (
                 ) AS STAGE_CHNG_YYYYQQ,
                 YEAR(A.STAGE_CHANGE_DATE__C) AS STAGE_CHNG_YYYY,
                 A.AMOUNT,
-                a.PROBABILITY,
+                a.Probability__c [Probability],
                 ii.name [Primary_Insurance__c],
                 isnull(
                     CASE
