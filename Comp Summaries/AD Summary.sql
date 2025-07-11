@@ -1,3 +1,17 @@
+DECLARE @PREV_YYYYMM VARCHAR(7) = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM');
+
+
+WITH IMP AS (
+    SELECT
+        IMPLANTED_YYYYMM,
+        REGION_ID,
+        SUM(IMPLANT_UNITS) AS IMPLANT_UNITS
+    FROM
+        qry_COMP_ASD_DETAIL
+    GROUP BY
+        IMPLANTED_YYYYMM,
+        REGION_ID
+)
 SELECT
     A.*,
     L1_PO + L2_PO AS ASD_TTL_PO,
@@ -14,11 +28,11 @@ FROM
         SELECT
             CLOSE_YYYYMM,
             REGION_NM,
-            REGION_ID,
+            C.REGION_ID,
             SALES_CREDIT_ASD_EMAIL,
             THRESHOLD,
             [PLAN],
-            SUM(IMPLANT_UNITS) AS IMPLANT_UNITS,
+            I.IMPLANT_UNITS,
             SUM(REVENUE_UNITS) AS REVENUE_UNITS,
             SUM(SALES_COMMISSIONABLE) AS SALES,
             MAX(QTD_SALES_COMMISSIONABLE) AS QTD_SALES_COMMISSIONABLE,
@@ -30,8 +44,10 @@ FROM
             SUM(L2_PO) AS L2_PO --add spiff po
         FROM
             qry_COMP_ASD_DETAIL C
+            LEFT JOIN IMP I ON C.CLOSE_YYYYMM = I.IMPLANTED_YYYYMM
+            AND C.REGION_ID = I.REGION_ID
         WHERE
-            CLOSE_YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+            CLOSE_YYYYMM = @PREV_YYYYMM
             AND CLOSEDATE >= (
                 SELECT
                     START_DT
@@ -43,10 +59,11 @@ FROM
         GROUP BY
             CLOSE_YYYYMM,
             REGION_NM,
-            REGION_ID,
+            C.REGION_ID,
             SALES_CREDIT_ASD_EMAIL,
             THRESHOLD,
             [PLAN],
+            I.IMPLANT_UNITS,
             [L1 Rate],
             [L2 Rate]
     ) AS A
