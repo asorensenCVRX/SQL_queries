@@ -43,16 +43,36 @@ SELECT
             SELECT
                 EMP_EMAIL
             FROM
-                qryRoster_RM
-        )
-        AND A.ST_DT >= (
-            SELECT
-                START_DT
-            FROM
-                qryRoster_RM R
+                tblRoster
             WHERE
-                A.OWNER_EMAIL = R.EMP_EMAIL
-        ) THEN 'Open Territory'
+                [ROLE] IN ('FCE', 'RM')
+        ) THEN CASE
+            /* this statement solves for CS reps who own accounts then are promoted to a TM role while still maintaining those accounts */
+            WHEN EXISTS (
+                SELECT
+                    1
+                FROM
+                    tblRoster R
+                WHERE
+                    R.EMP_EMAIL = A.OWNER_EMAIL
+                    AND [ROLE] = 'REP'
+                    AND A.END_DT BETWEEN R.START_DT
+                    AND R.END_DT
+            ) THEN ISNULL(E.COVERAGE_TYPE, 'Normal')
+            /* this statement assigns accounts as 'Open Territory' when the account is taken over by someone in a CS role */
+            WHEN EXISTS(
+                SELECT
+                    1
+                FROM
+                    tblRoster R
+                WHERE
+                    R.EMP_EMAIL = A.OWNER_EMAIL
+                    AND [ROLE] IN ('FCE', 'RM')
+                    AND A.ST_DT BETWEEN R.START_DT
+                    AND R.END_DT
+            ) THEN 'Open Territory'
+            ELSE ISNULL(E.COVERAGE_TYPE, 'Normal')
+        END
         ELSE ISNULL(E.COVERAGE_TYPE, 'Normal')
     END AS COVERAGE_TYPE
 FROM
