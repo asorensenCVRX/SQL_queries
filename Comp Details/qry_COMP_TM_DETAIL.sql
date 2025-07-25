@@ -10,6 +10,7 @@ WITH ROSTER AS (
         CROSS JOIN (
             SELECT
                 DISTINCT YYYYMM,
+                MONTH_END_DATE,
                 YYYYQQ,
                 YYYYHH
             FROM
@@ -121,11 +122,11 @@ OPPS AS (
         T.EMAIL AS CS_PO_EMAIL,
         CASE
             WHEN T.PO_TYPE = 'revenue' THEN ISNULL(T.PO_PER, 0) * REVENUE_UNITS
-            ELSE ISNULL(T.PO_PER, 0)
+            WHEN T.PO_TYPE = 'implant' THEN ISNULL(T.PO_PER, 0)
         END AS PO_PER,
         CASE
             WHEN T.PO_TYPE = 'revenue' THEN SALES * ISNULL(T.[PO_%], 0)
-            ELSE ISNULL(T.[PO_%], 0)
+            WHEN T.PO_TYPE = 'implant' THEN ISNULL(T.[PO_%], 0)
         END AS [PO_%],
         T.PO_TYPE
     FROM
@@ -348,8 +349,8 @@ FROM
                         PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
                         ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ)
                         ORDER BY
-                            OPPS.CLOSEDATE,
-                            OPPS.NAME
+                            ISNULL(OPPS.CLOSEDATE, ROSTER.MONTH_END_DATE),
+                            ISNULL(OPPS.NAME, 'ZZZ')
                     ) AS QTD_SALES_COMISSIONABLE,
                     /* make sure implants are only counted based on impl date, not closedate */
                     SUM(ISNULL(IMPLANT_UNITS, 0)) OVER(

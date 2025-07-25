@@ -33,11 +33,11 @@ FROM
             A.*,
             CASE
                 WHEN FTP.PO_TYPE = 'revenue' THEN ISNULL(FTP.PO_PER, 0) * REVENUE_UNITS
-                ELSE ISNULL(FTP.PO_PER, 0)
+                WHEN FTP.PO_TYPE = 'implant' THEN ISNULL(FTP.PO_PER, 0)
             END AS TGT_PO,
             CASE
                 WHEN FTP.PO_TYPE = 'revenue' THEN SALES * ISNULL(FTP.[PO_%], 0)
-                ELSE ISNULL(FTP.[PO_%], 0)
+                WHEN FTP.PO_TYPE = 'implant' THEN ISNULL(FTP.[PO_%], 0)
             END AS [PO_%],
             FTP.[TYPE] AS TGT_TYPE,
             FTP.PO_TYPE,
