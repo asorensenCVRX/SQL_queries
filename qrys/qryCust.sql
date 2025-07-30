@@ -1,3 +1,4 @@
+-- CREATE VIEW qryCust AS
 SELECT
     W.NAME AS ACT_TYPE,
     REPLACE(dbo.ConvertToTitleCase(A.NAME), '?', '') AS NAME,
@@ -6,6 +7,9 @@ SELECT
     A.STATUS_COLOR__C,
     A.STATUS__C,
     A.DATE_OF_FIRST_COMMERCIAL_IMPLANT__C,
+    q.YYYYMM [MNTH_FIRST_IMPLANT],
+    q2.YYYYMM [YYYYMM_LAST_IMPLANT],
+    q.YYYYQQ [QTR_FIRST_IMPLANT],
     A.DATE_OF_LASTCOMMERCIAL_IMPLANT__C AS DATE_OF_LAST_COMMERCIAL_IMPLANT__C,
     CASE
         WHEN a.DATE_OF_LASTCOMMERCIAL_IMPLANT__C = '1899-12-30 00:00:00' THEN NULL
@@ -77,7 +81,18 @@ SELECT
     END AS isAIC,
     A.CONTRACTING_DISCUSSIONS_INITIATED__C,
     A.CONTRACTING__C,
-    A.PRICE_BOOK__C
+    A.PRICE_BOOK__C,
+    K.Blueprint_Type__c,
+    CASE
+        WHEN A.ID IN (
+            SELECT
+                DISTINCT ACCOUNTID
+            FROM
+                sfdcOpps
+        ) THEN 1
+        ELSE 0
+    END AS [HasOpps?],
+    A.Account_Tier__c
 FROM
     dbo.sfdcAccount AS A
     LEFT OUTER JOIN dbo.qryUsers AS B ON A.OWNERID = B.ID
@@ -99,5 +114,11 @@ FROM
         5
     ) = F.zip
     LEFT OUTER JOIN dbo.sfdcRecordType AS W ON A.RECORDTYPEID = W.ID
+    LEFT JOIN ODS.sfdcBlueprint K ON a.ID = k.Account__c
+    AND k.IsDeleted = 0
+    AND k.Status__c = 'Active'
+    LEFT JOIN qryCalendar Q ON a.DATE_OF_FIRST_COMMERCIAL_IMPLANT__C = q.DT
+    LEFT JOIN qryCalendar Q2 ON a.DATE_OF_LASTCOMMERCIAL_IMPLANT__C = q2.DT
 WHERE
-    (A.NAME NOT LIKE '%test%');
+    (A.NAME NOT LIKE '%test%')
+    AND W.NAME = 'Customer'
