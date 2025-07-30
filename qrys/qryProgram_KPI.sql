@@ -39,7 +39,8 @@ WITH A AS (
         M.CBSA,
         M.RANKSCORE,
         M.SRC,
-        m.ID
+        m.ID,
+        ACCOUNT_TIER
     FROM
         (
             /* this first part of the union query is bringing in accounts from SFDC */
@@ -100,7 +101,8 @@ WITH A AS (
                 d.[MEDICARE_%],
                 ISNULL(d.RankScore, 4000) [RANKSCORE],
                 'SFDC' AS [SRC],
-                TU
+                TU,
+                TRY_CAST(LEFT(C.Account_Tier__c, 1) AS INT) AS ACCOUNT_TIER
             FROM
                 qryCust C
                 LEFT JOIN qryCust_DHC d ON C.DHC_ACCOUNT_ID__C = CAST(d.[Definitive ID] AS VARCHAR)
@@ -193,7 +195,8 @@ WITH A AS (
                 T.[MEDICARE_%],
                 ISNULL(T.RankScore, 4000) [RANKSCORE],
                 'DHC' AS [SRC],
-                TU
+                TU,
+                0 AS TIER
             FROM
                 qryCust_DHC T
                 LEFT JOIN (
@@ -547,248 +550,265 @@ BP AS (
         ods.sfdcBlueprint
     WHERE
         Status__c = 'Active'
-)
+),
+Q AS
 /* QUERY STARTS HERE */
-SELECT
-    Y.*,
-    ISNULL(CM.CONSECUTIVE_MONTHS, 0) AS CONSISTENCY,
-    ISNULL(CM.[CONSISTENCY_METRIC_MET?], 0) AS [CONSISTENCY_METRIC_MET?],
-    CASE
-        WHEN [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 4 THEN 1
-        ELSE 0
-    END AS [isProgram?],
-    CONCAT(
-        [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + isnull([CONSISTENCY_METRIC_MET?], 0),
-        '/4'
-    ) AS METRICS_MET,
-    count(*) over (PARTITION by [Definitive ID]) AS [DEFINITIVE ID DUPE?],
-    /* some records have an SFDC associated with a different Definitive ID than what Jordan has in his file.
-     This "case when" statement allows you to exclude those SFDC/Definitve ID pairs that do not match Jordan's
-     mapping file. */
-    CASE
-        /*if only 1 record exists for the Definitive ID, do not exclude*/
-        WHEN count(*) over (PARTITION by [Definitive ID]) = 1 THEN 'NO'
-        /*if 2 records exist for the Definitive ID, only keep the one that matches the Definitive ID & SFDC ID in the mapping file*/
-        WHEN count(*) over (PARTITION by [Definitive ID]) = 2
-        AND EXISTS(
-            SELECT
-                1
-            FROM
-                tblAccount_Mapping AM
-            WHERE
-                Y.[Definitive ID] = TRIM(AM.[Definitive ID])
-                AND Y.SFDC_ID = TRIM(AM.[Salesforce ID])
-        ) THEN 'NO'
-        /*if 2 records exist for the Definitive ID and the tier = 4, only keep the records where the source
-         is SFDC and the Definitive ID is not in the mapping file (if the Definitive ID is in the mapping file, it should
-         have already been captured in the previous "WHEN" statement)*/
-        WHEN [Tier] = 4
-        AND count(*) over (PARTITION by [Definitive ID]) = 2
-        AND [SRC] = 'SFDC'
-        AND Y.[Definitive ID] NOT IN (
-            SELECT
-                TRIM([Definitive ID])
-            FROM
-                tblAccount_Mapping
-            WHERE
-                [Definitive ID] IS NOT NULL
-        ) THEN 'NO'
-        WHEN count(*) over (PARTITION by [Definitive ID]) > 100 THEN 'NO'
-        ELSE 'YES'
-    END AS [EXCLUDE?],
-    CASE
-        WHEN SFDC_ID IS NULL THEN NULL
-        ELSE CONCAT(
-            'https://cvrx.lightning.force.com/lightning/r/Account/',
-            SFDC_ID,
-            '/view'
-        )
-    END AS SFDC_LINK,
-    CASE
-        WHEN BP.Status__c = 'Active' THEN 'Yes'
-        ELSE 'No'
-    END AS [Blueprint Completed?],
-    BP.Blueprint_Type__c AS [Blueprint Type],
-    BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
-    BP.BP_ID AS BLUEPRINT_ID,
-    CASE
-        WHEN BP_ID IS NULL THEN NULL
-        ELSE CONCAT(
-            'https://cvrx.lightning.force.com/lightning/r/Blueprint__c/',
-            BP_ID,
-            '/view'
-        )
-    END AS BLUEPRINT_LINK,
-    CASE
-        WHEN ACT_ID IN (
-            SELECT
-                PARENT_ID
-            FROM
-                tblAct_Satellites
-        ) THEN 'Yes'
-        ELSE 'No'
-    END AS [HAS_SATELLITES?],
-    CASE
-        WHEN ACT_ID IN (
-            SELECT
-                CHILD_ID
-            FROM
-                tblAct_Satellites
-        ) THEN (
-            SELECT
-                PARENT_ID
-            FROM
-                tblAct_Satellites
-            WHERE
-                CHILD_ID = ACT_ID
-        )
-        ELSE NULL
-    END AS [PARENT_ID]
-FROM
-    (
-        SELECT
-            X.NAME,
-            X.CITY_STATE,
-            X.STAGE,
-            X.Analytics_Rank,
-            X.[LEK Priority],
-            X.REP_RANK,
-            X.GPO,
-            X.IDN,
-            X.IDN_CONTRACT,
-            X.TU,
-            X.PATIENTS_IN_FUNNEL,
-            X.[REIMBURSEMENT_QTILE],
-            X.[MEDICARE_%],
-            X.ACT_OWNER,
-            X.REP_EMAIL,
-            X.REP,
-            X.REGION,
-            CASE
-                WHEN TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID])) = '0' THEN NULL
-                ELSE TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID]))
-            END AS [Definitive ID],
-            CASE
-                WHEN TRIM(
-                    ISNULL(
-                        CAST(Z.[CMS ID] AS VARCHAR(MAX)),
-                        CAST(X.CMS_ID AS VARCHAR(MAX))
-                    )
-                ) = '0' THEN NULL
-                ELSE TRIM(
-                    ISNULL(
-                        CAST(Z.[CMS ID] AS VARCHAR(MAX)),
-                        CAST(X.CMS_ID AS VARCHAR(MAX))
-                    )
-                )
-            END AS CMS_ID,
-            X.SFDC_ID,
-            X.ZIP_5,
-            X.CBSA,
-            X.SRC,
-            X.FIRST_IMP,
-            X.LAST_IMP,
-            X.[STATUS],
-            X.[IMPLANTS (ALL)],
-            X.[IMPLANTS (R12)],
-            X.[IMPLANTS (R6)],
-            X.[REV_UNITS (ALL)],
-            X.[REV_UNITS (R12)],
-            X.[REV_UNITS (R6)],
-            X.[REV_$ (ALL)],
-            X.[REV_$ (R12)],
-            X.[REV_$ (R6)],
-            X.[SURG (ALL)],
-            X.[SURG (R12)],
-            X.[SURG (R6)],
-            X.[ARC (All)],
-            X.[ARC (R12)],
-            X.[ARC (R6)],
-            ISNULL(Z.[HF Diagnosis], 0) AS [HF Diagnosis],
-            ISNULL(Z.CardioMEMS, 0) AS CardioMEMS,
-            ISNULL(Z.LVAD, 0) AS LVAD,
-            ISNULL(Z.[CRT and ICD], 0) AS [CRT and ICD],
-            ISNULL(Z.Mitraclip, 0) AS Mitraclip,
-            ISNULL(Z.Watchman, 0) AS Watchman,
-            ISNULL(Z.Tier, 4) AS Tier,
-            CASE
-                WHEN [IMPLANTS (ALL)] >= 20 THEN 1
-                ELSE 0
-            END AS [VOLUME_METRIC_MET?],
-            CASE
-                WHEN [ARC (R12)] >= 5 THEN 1
-                ELSE 0
-            END AS [REFERRER_METRIC_MET?],
-            CASE
-                WHEN [SURG (R12)] >= 2 THEN 1
-                ELSE 0
-            END AS [SURGEON_METRIC_MET?]
-        FROM
-            (
+(
+    SELECT
+        Y.*,
+        ISNULL(CM.CONSECUTIVE_MONTHS, 0) AS CONSISTENCY,
+        ISNULL(CM.[CONSISTENCY_METRIC_MET?], 0) AS [CONSISTENCY_METRIC_MET?],
+        CASE
+            WHEN [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 4 THEN 1
+            ELSE 0
+        END AS [isProgram?],
+        CONCAT(
+            [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + isnull([CONSISTENCY_METRIC_MET?], 0),
+            '/4'
+        ) AS METRICS_MET,
+        count(*) over (PARTITION by [Definitive ID]) AS [DEFINITIVE ID DUPE?],
+        /* some records have an SFDC associated with a different Definitive ID than what Jordan has in his file.
+         This "case when" statement allows you to exclude those SFDC/Definitve ID pairs that do not match Jordan's
+         mapping file. */
+        CASE
+            /*if only 1 record exists for the Definitive ID, do not exclude*/
+            WHEN count(*) over (PARTITION by [Definitive ID]) = 1 THEN 'NO'
+            /*if 2 records exist for the Definitive ID, only keep the one that matches the Definitive ID & SFDC ID in the mapping file*/
+            WHEN count(*) over (PARTITION by [Definitive ID]) = 2
+            AND EXISTS(
                 SELECT
-                    A.NAME,
-                    A.CITY_STATE,
-                    A.STAGE,
-                    A.Analytics_Rank,
-                    A.[LEK Priority],
-                    A.REP_RANK,
-                    A.GPO,
-                    ISNULL(A.IDN, B.IDN) AS IDN,
-                    A.IDN_CONTRACT,
-                    A.TU,
-                    A.PATIENTS_IN_FUNNEL,
-                    A.REIMBURSEMENT_QTILE,
-                    A.[MEDICARE_%],
-                    ISNULL(A.REP, B.ACT_OWNER_NAME) AS ACT_OWNER,
-                    A.REP_EMAIL,
-                    A.REP,
-                    A.REGION,
-                    CAST(
-                        ISNULL(A.[Definitive ID], B.DHC_ACCOUNT_ID__C) AS VARCHAR(MAX)
-                    ) AS [Definitive ID],
-                    CAST(
-                        ISNULL(A.PROVIDER_ID, B.CMS_ID__C) AS VARCHAR(MAX)
-                    ) AS CMS_ID,
-                    CAST(ISNULL(A.ID, B.ACT_ID) AS VARCHAR(MAX)) AS SFDC_ID,
-                    A.ZIP_5,
-                    A.CBSA,
-                    A.SRC,
-                    B.FIRST_IMP,
-                    B.LAST_IMP,
-                    [STATUS],
-                    ISNULL(B.[IMPLANTS (ALL)], 0) AS [IMPLANTS (ALL)],
-                    ISNULL(B.[IMPLANTS (R12)], 0) AS [IMPLANTS (R12)],
-                    ISNULL(B.[IMPLANTS (R6)], 0) AS [IMPLANTS (R6)],
-                    ISNULL(B.[REV_UNITS (ALL)], 0) AS [REV_UNITS (ALL)],
-                    ISNULL(B.[REV_UNITS (R12)], 0) AS [REV_UNITS (R12)],
-                    ISNULL(B.[REV_UNITS (R6)], 0) AS [REV_UNITS (R6)],
-                    ISNULL(B.[REV_$ (ALL)], 0) AS [REV_$ (ALL)],
-                    ISNULL(B.[REV_$ (R12)], 0) AS [REV_$ (R12)],
-                    ISNULL(B.[REV_$ (R6)], 0) AS [REV_$ (R6)],
-                    ISNULL(B.[SURG (ALL)], 0) AS [SURG (ALL)],
-                    ISNULL(B.[SURG (R12)], 0) AS [SURG (R12)],
-                    ISNULL(B.[SURG (R6)], 0) AS [SURG (R6)],
-                    ISNULL(B.[ARC (All)], 0) AS [ARC (All)],
-                    ISNULL(B.[ARC (R12)], 0) AS [ARC (R12)],
-                    ISNULL(B.[ARC (R6)], 0) AS [ARC (R6)]
+                    1
                 FROM
-                    A FULL
-                    JOIN b ON a.ID = b.ACT_ID
-            ) AS X
-            OUTER APPLY(
-                SELECT
-                    TOP 1 *
-                FROM
-                    tblAccount_Mapping AS AM
+                    tblAccount_Mapping AM
                 WHERE
-                    TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID)
-                    OR TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID])
-                ORDER BY
+                    Y.[Definitive ID] = TRIM(AM.[Definitive ID])
+                    AND Y.SFDC_ID = TRIM(AM.[Salesforce ID])
+            ) THEN 'NO'
+            /*if 2 records exist for the Definitive ID and the tier = 4, only keep the records where the source
+             is SFDC and the Definitive ID is not in the mapping file (if the Definitive ID is in the mapping file, it should
+             have already been captured in the previous "WHEN" statement)*/
+            WHEN [Tier] = 4
+            AND count(*) over (PARTITION by [Definitive ID]) = 2
+            AND [SRC] = 'SFDC'
+            AND Y.[Definitive ID] NOT IN (
+                SELECT
+                    TRIM([Definitive ID])
+                FROM
+                    tblAccount_Mapping
+                WHERE
+                    [Definitive ID] IS NOT NULL
+            ) THEN 'NO'
+            WHEN count(*) over (PARTITION by [Definitive ID]) > 100 THEN 'NO'
+            ELSE 'YES'
+        END AS [EXCLUDE?],
+        CASE
+            WHEN SFDC_ID IS NULL THEN NULL
+            ELSE CONCAT(
+                'https://cvrx.lightning.force.com/lightning/r/Account/',
+                SFDC_ID,
+                '/view'
+            )
+        END AS SFDC_LINK,
+        CASE
+            WHEN BP.Status__c = 'Active' THEN 'Yes'
+            ELSE 'No'
+        END AS [Blueprint Completed?],
+        BP.Blueprint_Type__c AS [Blueprint Type],
+        BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
+        BP.BP_ID AS BLUEPRINT_ID,
+        CASE
+            WHEN BP_ID IS NULL THEN NULL
+            ELSE CONCAT(
+                'https://cvrx.lightning.force.com/lightning/r/Blueprint__c/',
+                BP_ID,
+                '/view'
+            )
+        END AS BLUEPRINT_LINK,
+        CASE
+            WHEN ACT_ID IN (
+                SELECT
+                    PARENT_ID
+                FROM
+                    tblAct_Satellites
+            ) THEN 'Yes'
+            ELSE 'No'
+        END AS [HAS_SATELLITES?],
+        CASE
+            WHEN ACT_ID IN (
+                SELECT
+                    CHILD_ID
+                FROM
+                    tblAct_Satellites
+            ) THEN (
+                SELECT
+                    PARENT_ID
+                FROM
+                    tblAct_Satellites
+                WHERE
+                    CHILD_ID = ACT_ID
+            )
+            ELSE NULL
+        END AS [PARENT_ID]
+    FROM
+        (
+            SELECT
+                X.NAME,
+                X.CITY_STATE,
+                X.STAGE,
+                X.Analytics_Rank,
+                X.[LEK Priority],
+                X.REP_RANK,
+                X.GPO,
+                X.IDN,
+                X.IDN_CONTRACT,
+                X.TU,
+                X.PATIENTS_IN_FUNNEL,
+                X.[REIMBURSEMENT_QTILE],
+                X.[MEDICARE_%],
+                X.ACT_OWNER,
+                X.REP_EMAIL,
+                X.REP,
+                X.REGION,
+                CASE
+                    WHEN TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID])) = '0' THEN NULL
+                    ELSE TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID]))
+                END AS [Definitive ID],
+                CASE
+                    WHEN TRIM(
+                        ISNULL(
+                            CAST(Z.[CMS ID] AS VARCHAR(MAX)),
+                            CAST(X.CMS_ID AS VARCHAR(MAX))
+                        )
+                    ) = '0' THEN NULL
+                    ELSE TRIM(
+                        ISNULL(
+                            CAST(Z.[CMS ID] AS VARCHAR(MAX)),
+                            CAST(X.CMS_ID AS VARCHAR(MAX))
+                        )
+                    )
+                END AS CMS_ID,
+                X.SFDC_ID,
+                X.ZIP_5,
+                X.CBSA,
+                X.SRC,
+                X.FIRST_IMP,
+                X.LAST_IMP,
+                X.[STATUS],
+                X.[IMPLANTS (ALL)],
+                X.[IMPLANTS (R12)],
+                X.[IMPLANTS (R6)],
+                X.[REV_UNITS (ALL)],
+                X.[REV_UNITS (R12)],
+                X.[REV_UNITS (R6)],
+                X.[REV_$ (ALL)],
+                X.[REV_$ (R12)],
+                X.[REV_$ (R6)],
+                X.[SURG (ALL)],
+                X.[SURG (R12)],
+                X.[SURG (R6)],
+                X.[ARC (All)],
+                X.[ARC (R12)],
+                X.[ARC (R6)],
+                ISNULL(Z.[HF Diagnosis], 0) AS [HF Diagnosis],
+                ISNULL(Z.CardioMEMS, 0) AS CardioMEMS,
+                ISNULL(Z.LVAD, 0) AS LVAD,
+                ISNULL(Z.[CRT and ICD], 0) AS [CRT and ICD],
+                ISNULL(Z.Mitraclip, 0) AS Mitraclip,
+                ISNULL(Z.Watchman, 0) AS Watchman,
+                -- ISNULL(Z.Tier, 4) AS Tier,
+                ISNULL(
                     CASE
-                        WHEN TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID) THEN 1
-                        WHEN TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID]) THEN 2
-                    END
-            ) AS Z
-    ) AS Y
-    LEFT JOIN CM ON Y.SFDC_ID = CM.ACT_ID
-    LEFT JOIN BP ON Y.SFDC_ID = BP.Account__c;
+                        WHEN X.ACCOUNT_TIER IN (0, NULL) THEN Z.Tier
+                        ELSE X.ACCOUNT_TIER
+                    END,
+                    4
+                ) AS [Tier],
+                CASE
+                    WHEN [IMPLANTS (ALL)] >= 20 THEN 1
+                    ELSE 0
+                END AS [VOLUME_METRIC_MET?],
+                CASE
+                    WHEN [ARC (R12)] >= 5 THEN 1
+                    ELSE 0
+                END AS [REFERRER_METRIC_MET?],
+                CASE
+                    WHEN [SURG (R12)] >= 2 THEN 1
+                    ELSE 0
+                END AS [SURGEON_METRIC_MET?]
+            FROM
+                (
+                    SELECT
+                        A.NAME,
+                        A.CITY_STATE,
+                        A.STAGE,
+                        A.ACCOUNT_TIER,
+                        A.Analytics_Rank,
+                        A.[LEK Priority],
+                        A.REP_RANK,
+                        A.GPO,
+                        ISNULL(A.IDN, B.IDN) AS IDN,
+                        A.IDN_CONTRACT,
+                        A.TU,
+                        A.PATIENTS_IN_FUNNEL,
+                        A.REIMBURSEMENT_QTILE,
+                        A.[MEDICARE_%],
+                        ISNULL(A.REP, B.ACT_OWNER_NAME) AS ACT_OWNER,
+                        A.REP_EMAIL,
+                        A.REP,
+                        A.REGION,
+                        CAST(
+                            ISNULL(A.[Definitive ID], B.DHC_ACCOUNT_ID__C) AS VARCHAR(MAX)
+                        ) AS [Definitive ID],
+                        CAST(
+                            ISNULL(A.PROVIDER_ID, B.CMS_ID__C) AS VARCHAR(MAX)
+                        ) AS CMS_ID,
+                        CAST(ISNULL(A.ID, B.ACT_ID) AS VARCHAR(MAX)) AS SFDC_ID,
+                        A.ZIP_5,
+                        A.CBSA,
+                        A.SRC,
+                        B.FIRST_IMP,
+                        B.LAST_IMP,
+                        [STATUS],
+                        ISNULL(B.[IMPLANTS (ALL)], 0) AS [IMPLANTS (ALL)],
+                        ISNULL(B.[IMPLANTS (R12)], 0) AS [IMPLANTS (R12)],
+                        ISNULL(B.[IMPLANTS (R6)], 0) AS [IMPLANTS (R6)],
+                        ISNULL(B.[REV_UNITS (ALL)], 0) AS [REV_UNITS (ALL)],
+                        ISNULL(B.[REV_UNITS (R12)], 0) AS [REV_UNITS (R12)],
+                        ISNULL(B.[REV_UNITS (R6)], 0) AS [REV_UNITS (R6)],
+                        ISNULL(B.[REV_$ (ALL)], 0) AS [REV_$ (ALL)],
+                        ISNULL(B.[REV_$ (R12)], 0) AS [REV_$ (R12)],
+                        ISNULL(B.[REV_$ (R6)], 0) AS [REV_$ (R6)],
+                        ISNULL(B.[SURG (ALL)], 0) AS [SURG (ALL)],
+                        ISNULL(B.[SURG (R12)], 0) AS [SURG (R12)],
+                        ISNULL(B.[SURG (R6)], 0) AS [SURG (R6)],
+                        ISNULL(B.[ARC (All)], 0) AS [ARC (All)],
+                        ISNULL(B.[ARC (R12)], 0) AS [ARC (R12)],
+                        ISNULL(B.[ARC (R6)], 0) AS [ARC (R6)]
+                    FROM
+                        A FULL
+                        JOIN b ON a.ID = b.ACT_ID
+                ) AS X
+                OUTER APPLY(
+                    SELECT
+                        TOP 1 *
+                    FROM
+                        tblAccount_Mapping AS AM
+                    WHERE
+                        TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID)
+                        OR TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID])
+                    ORDER BY
+                        CASE
+                            WHEN TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID) THEN 1
+                            WHEN TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID]) THEN 2
+                        END
+                ) AS Z
+        ) AS Y
+        LEFT JOIN CM ON Y.SFDC_ID = CM.ACT_ID
+        LEFT JOIN BP ON Y.SFDC_ID = BP.Account__c
+)
+SELECT
+    *
+FROM
+    Q
+WHERE
+    [EXCLUDE?] = 'NO'
