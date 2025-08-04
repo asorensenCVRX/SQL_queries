@@ -138,8 +138,8 @@ OPPS AS (
         AND O.CLOSEDATE BETWEEN AA.ST_DT
         AND AA.END_DT
         /* check FCE payouts */
-        /* join obj_id from tblFCE_TGT_PO on either account id or physician id, depending on the target */
-        LEFT JOIN tblFCE_TGT_PO T ON CASE
+        /* join obj_id from tblACCT_TGT on either account id or physician id, depending on the target */
+        LEFT JOIN tblACCT_TGT T ON CASE
             WHEN T.[TYPE] = 'ACCT' THEN O.ACT_ID
             WHEN T.[TYPE] = 'DOC' THEN O.PHYSICIAN_ID
         END = T.OBJ_ID
@@ -158,6 +158,7 @@ OPPS AS (
         END >= 1
         /* targets are only paid on de novo */
         AND REASON_FOR_IMPLANT__C = 'De novo'
+        AND T.PO_TYPE IN ('implant', 'revenue')
         /* bring in tblSalesSplits so credit for opps can be shared */
         LEFT JOIN tblSalesSplits S ON O.OPP_ID = S.OPP_ID
     WHERE

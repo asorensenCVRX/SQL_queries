@@ -109,7 +109,7 @@ FROM
                     AND SALES.CLOSEDATE <= ISNULL(DOT, '2099-12-31')
             ) AS A
             /* bring in CS targets */
-            LEFT JOIN tblFCE_TGT_PO FTP ON A.SALES_CREDIT_CS_EMAIL = FTP.EMAIL
+            LEFT JOIN tblACCT_TGT FTP ON A.SALES_CREDIT_CS_EMAIL = FTP.EMAIL
             AND CASE
                 WHEN FTP.[TYPE] = 'ACCT' THEN A.ACT_ID
                 WHEN FTP.[TYPE] = 'DOC' THEN A.PHYSICIAN_ID
