@@ -35,10 +35,6 @@ SELECT
     A.*,
     Z.TERR_ID AS ZIP_TERR_ID,
     CASE
-        WHEN A.REP_TERR_ID <> Z.TERR_ID THEN 1
-        ELSE 0
-    END AS [TERR_MISMATCH?],
-    CASE
         WHEN OWNER_EMAIL IN (
             SELECT
                 EMP_EMAIL
@@ -98,7 +94,6 @@ FROM
     LEFT JOIN tblZipAlign Z ON Z.ZIP_CODE = A.ZIP
     LEFT JOIN tblAct_Exceptions E ON A.ACT_ID = E.SFDC_ID
     AND A.REP_TERR_ID = E.TERR_ID
-    AND A.REP_TERR_ID <> Z.TERR_ID
     AND (
         A.ST_DT BETWEEN ISNULL(E.[START], '2025-01-01')
         AND ISNULL(E.[END], '2099-12-31')
