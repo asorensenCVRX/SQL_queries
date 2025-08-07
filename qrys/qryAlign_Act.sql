@@ -35,6 +35,10 @@ SELECT
     A.*,
     Z.TERR_ID AS ZIP_TERR_ID,
     CASE
+        WHEN A.REP_TERR_ID <> Z.TERR_ID THEN 1
+        ELSE 0
+    END AS [TERR_MISMATCH?],
+    CASE
         WHEN OWNER_EMAIL IN (
             SELECT
                 EMP_EMAIL
