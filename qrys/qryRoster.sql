@@ -41,7 +41,14 @@ WITH R AS (
         G.YYYYMM_ST_DT,
         G.YYYYMM_END_DT,
         CAST(D.DOH AS DATE) AS DOH,
-        A.START_DT AS [ROLE_START_DT],
+        CASE
+            WHEN ROW_NUMBER() OVER (
+                PARTITION BY A.EMP_EMAIL
+                ORDER BY
+                    A.START_DT ASC
+            ) = 1 THEN CAST(D.DOH AS DATE)
+            ELSE A.START_DT
+        END AS [ROLE_START_DT],
         A.END_DT AS [ROLE_END_DT],
         CAST(YEAR(A.START_DT) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(A.START_DT) AS VARCHAR), 2) AS ACTIVE_YYYYMM,
         CAST(YEAR(D.DOH) AS VARCHAR) + '_' + RIGHT('Q' + CAST(DATEPART(q, D.DOH) AS VARCHAR), 2) AS DOH_YYYYQQ,
