@@ -1,10 +1,15 @@
--- CREATE VIEW qryMetrics AS 
+-- CREATE VIEW qryMetrics AS
 SELECT
-    '7. HF Opportunities Created' [Metric],
+    '6. HF Opportunities Created' [Metric],
     dbo.ConvertToTitleCase(ACT_OWNER_REGION) [Region],
     OPP_OWNER_NAME,
+    OPP_OWNER_EMAIL,
     ACT_OWNER_NAME,
-    ISNULL(cast(r.Tier AS varchar(15)), 'Other Role') ACT_OWNER_TIER,
+    ACT_OWNER_EMAIL,
+    ISNULL(
+        cast(r.Tier AS varchar(15)),
+        'Other Role'
+    ) ACT_OWNER_TIER,
     NAME [OPP_NAME],
     STAGENAME [STAGE],
     ACCOUNT_INDICATION__C [ACCOUNT],
@@ -41,55 +46,18 @@ WHERE
     RECORD_TYPE = 'Procedure - North America'
 UNION
 ALL
-SELECT
-    '6. Initial Consults' [Metric],
-    dbo.ConvertToTitleCase(ACT_OWNER_REGION) [Region],
-    OPP_OWNER_NAME,
-    ACT_OWNER_NAME,
-    ISNULL(cast(r.Tier AS varchar(15)), 'Other Role') ACT_OWNER_TIER,
-    NAME [OPP_NAME],
-    STAGENAME [STAGE],
-    ACCOUNT_INDICATION__C [ACCOUNT],
-    1 AS Counter,
-    CASE
-        WHEN r.tier = 1 THEN 1
-        ELSE 0
-    END AS T1,
-    CASE
-        WHEN r.tier = 2 THEN 1
-        ELSE 0
-    END AS T2,
-    CASE
-        WHEN r.tier = 3 THEN 1
-        ELSE 0
-    END AS T3,
-    CASE
-        WHEN r.tier = 4 THEN 1
-        ELSE 0
-    END AS T4,
-    INITIAL_CONSULT_DT [DATE],
-    INITIAL_CONSULT_WK [WEEK],
-    c.[12_24_36_WEEKS] [WEEK_12_24_36],
-    c.[WEEK_#],
-    INITIAL_CONSULT_YYYYMM [YYYYMM],
-    INITIAL_CONSULT_YYYYQQ [YYYYQQ],
-    INITIAL_CONSULT_YR [YYYY]
-FROM
-    tmpOpps T
-    LEFT JOIN qryRoster R ON t.ACT_OWNER_EMAIL = r.REP_EMAIL
-    AND r.[isLATEST?] = 1
-    LEFT JOIN qrycalendar C ON T.INITIAL_CONSULT_DT = c.DT
-WHERE
-    INITIAL_CONSULT_DT IS NOT NULL
-    AND RECORD_TYPE = 'Procedure - North America'
-UNION
-ALL
+/*ALL*/
 SELECT
     '5. Prior Auth Submits' [Metric],
     dbo.ConvertToTitleCase(ACT_OWNER_REGION) [Region],
     OPP_OWNER_NAME,
+    OPP_OWNER_EMAIL,
     ACT_OWNER_NAME,
-    ISNULL(cast(r.Tier AS varchar(15)), 'Other Role') ACT_OWNER_TIER,
+    ACT_OWNER_EMAIL,
+    ISNULL(
+        cast(r.Tier AS varchar(15)),
+        'Other Role'
+    ) ACT_OWNER_TIER,
     NAME [OPP_NAME],
     STAGENAME [STAGE],
     ACCOUNT_INDICATION__C [ACCOUNT],
@@ -131,8 +99,13 @@ SELECT
     '4. Scheduled Surgical Consults' [Metric],
     dbo.ConvertToTitleCase(ACT_OWNER_REGION) [Region],
     OPP_OWNER_NAME,
+    OPP_OWNER_EMAIL,
     ACT_OWNER_NAME,
-    ISNULL(cast(r.Tier AS varchar(15)), 'Other Role') ACT_OWNER_TIER,
+    ACT_OWNER_EMAIL,
+    ISNULL(
+        cast(r.Tier AS varchar(15)),
+        'Other Role'
+    ) ACT_OWNER_TIER,
     NAME [OPP_NAME],
     STAGENAME [STAGE],
     ACCOUNT_INDICATION__C [ACCOUNT],
@@ -174,7 +147,9 @@ SELECT
     '3. Scheduled Implants' [Metric],
     dbo.ConvertToTitleCase(ACT_OWNER_REGION) [Region],
     OPP_OWNER_NAME,
+    OPP_OWNER_EMAIL,
     ACT_OWNER_NAME,
+    ACT_OWNER_EMAIL,
     ISNULL(cast(r.Tier AS varchar(15)), 'Other Role') ACT_OWNER_TIER,
     NAME [OPP_NAME],
     STAGENAME [STAGE],
@@ -211,13 +186,16 @@ FROM
 WHERE
     IMPLANT_SCHEDULED_DT IS NOT NULL
     AND RECORD_TYPE = 'Procedure - North America'
+    AND INDICATION_FOR_USE__C <> 'Hypertension'
 UNION
 ALL
 SELECT
     '1. Implants' [Metric],
     dbo.ConvertToTitleCase(ACT_OWNER_REGION) [Region],
     OPP_OWNER_NAME,
+    OPP_OWNER_EMAIL,
     ACT_OWNER_NAME,
+    ACT_OWNER_EMAIL,
     ISNULL(cast(r.Tier AS varchar(15)), 'Other Role') ACT_OWNER_TIER,
     NAME [OPP_NAME],
     STAGENAME [STAGE],
@@ -255,13 +233,17 @@ WHERE
     RECORD_TYPE = 'Procedure - North America'
     AND ISIMPL = 1
     AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
+    AND IMPLANT_UNITS <> 0
+    AND INDICATION_FOR_USE__C <> 'Hypertension'
 UNION
 ALL
 SELECT
     '2. Revenue Units' [Metric],
     dbo.ConvertToTitleCase(ACT_OWNER_REGION) [Region],
     OPP_OWNER_NAME,
+    OPP_OWNER_EMAIL,
     ACT_OWNER_NAME,
+    ACT_OWNER_EMAIL,
     ISNULL(cast(r.Tier AS varchar(15)), 'Other Role') ACT_OWNER_TIER,
     NAME [OPP_NAME],
     STAGENAME [STAGE],
@@ -298,3 +280,4 @@ FROM
 WHERE
     STAGENAME IN ('Revenue Recognized')
     AND OPP_COUNTRY = 'US'
+    AND INDICATION_FOR_USE__C <> 'Hypertension'
