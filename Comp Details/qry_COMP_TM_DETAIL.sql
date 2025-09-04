@@ -22,7 +22,7 @@ WITH ROSTER AS (
     WHERE
         (
             ROLE = 'REP'
-            OR REP_EMAIL IN ('ldasilvacampos@cvrx.com', 'ycruea@cvrx.com')
+            OR REP_EMAIL IN ('ldasilvacampos@cvrx.com')
         )
         /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
          or is null, and DOH is before or equal to last month. */
@@ -73,7 +73,7 @@ OPPS AS (
         ) AS SALES_CREDIT_REP_EMAIL,
         AA.REP_TERR_ID,
         AA.ZIP_TERR_ID,
-        AA.COVERAGE_TYPE,
+        ISNULL(AO.COVERAGE_TYPE, AA.COVERAGE_TYPE) AS COVERAGE_TYPE,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
         STAGENAME,
