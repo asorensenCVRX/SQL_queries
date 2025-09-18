@@ -47,9 +47,19 @@ WITH OPPS AS (
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
         AND STAGENAME = 'Revenue Recognized'
         AND sales <> 0
+),
+TS AS (
+    SELECT
+        T.*,
+        ISNULL(R.DOT, '2099-12-31') AS DOT
+    FROM
+        tblTerr_Split T
+        LEFT JOIN qryRoster R ON T.ORIGINAL_OWNER = R.REP_EMAIL
+        AND R.[isLATEST?] = 1
 )
 SELECT
     TS.ORIGINAL_OWNER AS OG_OWNER,
+    TS.DOT AS OG_OWNER_DOT,
     TS.ST_DATE AS SPLIT_START,
     -- DATEADD(DAY, 270, TS.ST_DATE) AS SPLIT_END,
     CASE
@@ -71,7 +81,11 @@ SELECT
     OPPS.*
 FROM
     OPPS
-    INNER JOIN tblTerr_Split TS ON OPPS.ACT_ID = TS.ACT_ID
+    INNER JOIN TS ON OPPS.ACT_ID = TS.ACT_ID
     AND OPPS.SALES_CREDIT_REP_EMAIL <> TS.ORIGINAL_OWNER
     AND OPPS.CLOSEDATE BETWEEN TS.ST_DATE
-    AND DATEADD(DAY, 270, TS.ST_DATE)
+    /* ensure splits end at termination date of original owner, if applicable */
+    AND CASE
+        WHEN TS.DOT < DATEADD(DAY, 270, TS.ST_DATE) THEN TS.DOT
+        ELSE DATEADD(DAY, 270, TS.ST_DATE)
+    END
