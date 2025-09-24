@@ -30,6 +30,49 @@ ACCT AS (
         sfdcAccount
     WHERE
         SHIPPINGCOUNTRYCODE = 'US'
+),
+E AS (
+    SELECT
+        *,
+        CASE
+            WHEN OVERLAP_FLAG = 1 THEN (
+                SELECT
+                    top 1 y.TERR_ID
+                FROM
+                    tblAct_Exceptions y
+                WHERE
+                    y.SFDC_ID = a.SFDC_ID
+                    AND Y.COVERAGE_TYPE = 'Ownership Override'
+                ORDER BY
+                    Y.START
+            )
+        END AS OWNERSHIP_OVERRIDE_TERR_ID
+    FROM
+        (
+            SELECT
+                r.*,
+                CASE
+                    WHEN EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            tblAct_Exceptions AS x
+                        WHERE
+                            x.SFDC_ID = r.SFDC_ID
+                            AND x.START <= COALESCE(r.[END], CONVERT(date, '9999-12-31'))
+                            AND r.START <= COALESCE(x.[END], CONVERT(date, '9999-12-31'))
+                            AND NOT (
+                                ISNULL(x.TERR_ID, '') = ISNULL(r.TERR_ID, '')
+                                AND ISNULL(x.COVERAGE_TYPE, '') = ISNULL(r.COVERAGE_TYPE, '')
+                                AND x.START = r.START
+                                AND ISNULL(x.[END], '9999-12-31') = ISNULL(r.[END], '9999-12-31')
+                            )
+                    ) THEN 1
+                    ELSE 0
+                END AS OVERLAP_FLAG
+            FROM
+                tblAct_Exceptions AS r
+        ) AS A
 )
 SELECT
     A.*,
@@ -74,7 +117,13 @@ SELECT
             ELSE ISNULL(E.COVERAGE_TYPE, 'Normal')
         END
         ELSE ISNULL(E.COVERAGE_TYPE, 'Normal')
-    END AS COVERAGE_TYPE
+    END AS COVERAGE_TYPE,
+    CASE
+        WHEN E.COVERAGE_TYPE <> 'Open Territory' THEN ISNULL(E.TERR_ID, Z.TERR_ID)
+        WHEN E.COVERAGE_TYPE = 'Open Territory'
+        AND E.OVERLAP_FLAG = 1 THEN OWNERSHIP_OVERRIDE_TERR_ID
+        ELSE Z.TERR_ID
+    END AS DE_FACTO_TERR_ID
 FROM
     (
         SELECT
@@ -96,7 +145,7 @@ FROM
             LEFT JOIN ACCT ON A.ACT_ID = ACCT.ID
     ) AS A
     LEFT JOIN tblZipAlign Z ON Z.ZIP_CODE = A.ZIP
-    LEFT JOIN tblAct_Exceptions E ON A.ACT_ID = E.SFDC_ID
+    LEFT JOIN E ON A.ACT_ID = E.SFDC_ID
     AND A.REP_TERR_ID = E.TERR_ID
     AND (
         A.ST_DT BETWEEN ISNULL(E.[START], '2025-01-01')
