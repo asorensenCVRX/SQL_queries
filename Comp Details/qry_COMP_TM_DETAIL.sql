@@ -47,9 +47,18 @@ OPPS AS (
     SELECT
         /* DISTINCT must be included so that if a CS has an account target and a physician target that overlap on an opp
          they are not double counted. */
-        DISTINCT CLOSEDATE,
-        CLOSE_YYYYMM,
-        CLOSE_YYYYQQ,
+        DISTINCT CASE
+            WHEN O.OPP_ID = '006UY00000PpE5lYAF' THEN '2025-09-30 00:00:00.0000000'
+            ELSE CLOSEDATE
+        END AS CLOSEDATE,
+        CASE
+            WHEN O.OPP_ID = '006UY00000PpE5lYAF' THEN '2025_09'
+            ELSE CLOSE_YYYYMM
+        END AS CLOSE_YYYYMM,
+        CASE
+            WHEN O.OPP_ID = '006UY00000PpE5lYAF' THEN '2025_Q3'
+            ELSE CLOSE_YYYYQQ
+        END AS CLOSE_YYYYQQ,
         IMPLANTED_DT,
         IMPLANTED_YYYYMM,
         IMPLANTED_YYYYQQ,
