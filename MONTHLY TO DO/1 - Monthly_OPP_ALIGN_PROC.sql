@@ -1,4 +1,4 @@
-DECLARE @YYYY_MM AS NVARCHAR(7) = '2025_01';
+DECLARE @YYYY_MM AS NVARCHAR(7) = '2025_09';
 
 
 -- INSERT INTO
@@ -20,12 +20,13 @@ SELECT
         ELSE 'HF'
     END AS [Indication],
     SALES_CREDIT_REP_EMAIL,
-    R.REP_ID
+    R.REP_ID,
+    NULL AS COVERAGE_TYPE
     /****** DEBUGGING FIELDS ******/
--- ,
---     A.EMAIL AS SFDC_ACCOUNT_OWNER_EMAIL,
---     TM.OPP_OWNER_EMAIL,
---     R.DOT AS SALES_CREDIT_REP_DOT
+    -- ,
+    --     A.EMAIL AS SFDC_ACCOUNT_OWNER_EMAIL,
+    --     TM.OPP_OWNER_EMAIL,
+    --     R.DOT AS SALES_CREDIT_REP_DOT
     /*********************/
 FROM
     qry_COMP_TM_DETAIL TM
@@ -56,3 +57,5 @@ WHERE
     --         ELSE OPP_OWNER_EMAIL
     --     END
     -- )
+    /**************************************/
+    -- AND OPP_ID NOT IN ('006UY00000L83MTYAZ', '006UY00000OdN5PYAV', '006UY00000PGcvlYAD')

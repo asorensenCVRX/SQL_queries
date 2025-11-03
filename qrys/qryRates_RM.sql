@@ -18,3 +18,5 @@ SELECT
     [GROWTH_%]
 FROM
     dbo.tblRates_RM AS A
+WHERE
+    REGION_ID NOT LIKE '%OFF'

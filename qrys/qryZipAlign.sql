@@ -35,4 +35,12 @@ FROM
         WHERE
             ROLE NOT IN ('FCE', 'MDR')
     ) R ON Z.TERR_ID = R.TERRITORY_ID
-    AND NUM = 1
+    AND NUM = 1;
+
+
+SELECT
+    *
+FROM
+    qryZipAlign
+WHERE
+    NAME_REP LIKE '%OPEN%'

@@ -1,3 +1,7 @@
 explore.sql
 explore2.sql
 CSR_Targets.sql
+/venv
+pandas_manipulation.py
+.idea/
+*.pyc

@@ -184,45 +184,10 @@ Q AS (
         AND UPPER(A.NAME) NOT LIKE '%TEST%'
         AND PRIVACY_REGION__C = 'North America'
         AND U.EMAIL <> 'forcedev1@cvrx.com'
-),
-Q2 AS(
-    SELECT
-        Q.*,
-        T.REGION
-    FROM
-        Q
-        LEFT JOIN tblTerritory T ON Q.DE_FACTO_TERR = T.TERRITORY_ID
 )
 SELECT
-    A.OWNER_EMAIL,
-    CLOSEDATE,
-    CLOSE_YYYYMM,
-    CLOSE_YYYY,
-    IMPLANTED_DT,
-    IMPLANTED_YYYYMM,
-    IMPLANTED_YYYY,
-    ACCOUNT_INDICATION__C AS ACCT_NAME,
-    O.NAME AS OPP_NAME,
-    SALES,
-    REVENUE_UNITS,
-    IMPLANT_UNITS
+    Q.*,
+    T.REGION
 FROM
-    tmpOpps O
-    LEFT JOIN qryAlign_Act A ON O.ACT_ID = A.ACT_ID
-    AND O.CLOSEDATE BETWEEN A.ST_DT
-    AND A.END_DT
-WHERE
-    O.ACT_ID IN (
-        SELECT
-            ACT_ID
-        FROM
-            Q2
-        WHERE
-            DE_FACTO_TERR = 'TERR_63'
-    )
-    AND OPP_STATUS = 'CLOSED'
-    AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
-    AND (
-        CLOSE_YYYY = 2025
-        OR IMPLANTED_YYYY = 2025
-    )
+    Q
+    LEFT JOIN tblTerritory T ON Q.DE_FACTO_TERR = T.TERRITORY_ID

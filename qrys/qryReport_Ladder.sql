@@ -1,4 +1,4 @@
--- CREATE VIEW qryReport_Ladder AS
+CREATE VIEW qryReport_Ladder AS
 SELECT
     REP_EMAIL,
     FNAME_REP,
@@ -44,15 +44,9 @@ SELECT
     NULL,
     TERRITORY_ID,
     REGION,
-    REGION + ' (' + UPPER(
-        SUBSTRING(
-            RM.NAME,
-            CHARINDEX(' ', RM.NAME) + 1,
-            LEN(RM.NAME) - CHARINDEX(' ', RM.NAME)
-        )
-    ) + ')',
+    REGION + ' (' + UPPER(LNAME) + ')',
     NULL,
     NULL
 FROM
     qryRoster_RM RM
-    LEFT JOIN tblEmployee E ON E.[WORK E-MAIL] = RM.EMP_EMAIL
+    LEFT JOIN tblEmployee E ON E.[WORK E-MAIL] = RM.EMP_EMAIL;

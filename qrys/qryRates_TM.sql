@@ -28,5 +28,7 @@ FROM
                     EID
                 FROM
                     tblRates_RM
+                WHERE
+                    REGION_ID NOT LIKE '%OFF'
             )
     ) R ON R.TERRITORY_ID = TM.TERRITORY_ID
