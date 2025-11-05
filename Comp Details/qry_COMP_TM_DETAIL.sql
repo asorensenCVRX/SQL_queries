@@ -22,7 +22,12 @@ WITH ROSTER AS (
     WHERE
         (
             ROLE = 'REP'
-            OR REP_EMAIL IN ('ldasilvacampos@cvrx.com')
+            OR REP_EMAIL IN (
+                'ldasilvacampos@cvrx.com',
+                'bkelly@cvrx.com',
+                'bsepulvado@cvrx.com',
+                'egorman@cvrx.com'
+            )
         )
         /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
          or is null, and DOH is before or equal to last month. */
@@ -82,6 +87,7 @@ OPPS AS (
         ) AS SALES_CREDIT_REP_EMAIL,
         AA.REP_TERR_ID,
         AA.ZIP_TERR_ID,
+        AA.DE_FACTO_TERR_ID,
         ISNULL(AO.COVERAGE_TYPE, AA.COVERAGE_TYPE) AS COVERAGE_TYPE,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
@@ -206,6 +212,7 @@ OPPS AS (
         OG_OWNER,
         NULL,
         NULL,
+        NULL,
         'T-Split' AS COVERAGE_TYPE,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
@@ -304,6 +311,7 @@ FROM
                     OPPS.COVERAGE_TYPE,
                     OPPS.REP_TERR_ID,
                     OPPS.ZIP_TERR_ID,
+                    OPPS.DE_FACTO_TERR_ID,
                     ISNULL(ALIGNMENT.REGION_NM, ROSTER.REGION) AS REGION_NM,
                     ISNULL(ALIGNMENT.REGION_ID, ROSTER.REGION_ID) AS REGION_ID,
                     OPPS.CLOSEDATE,
