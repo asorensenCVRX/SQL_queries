@@ -1,0 +1,78 @@
+DECLARE @TAKEOVER_DATE DATE = '2025-05-24',
+@CS_EMAIL VARCHAR(50) = 'bkelly@cvrx.com';
+
+
+/* CHECK TAKEOVER DATE */
+SELECT
+    *
+FROM
+    qryAlign_Act
+WHERE
+    OWNER_EMAIL = @CS_EMAIL;
+
+
+/* LAST MONTH SALES ELIGIBLE FOR PAYMENT */
+SELECT
+    SALES_CREDIT_REP_EMAIL,
+    SUM(
+        CASE
+            WHEN CLOSEDATE BETWEEN @TAKEOVER_DATE
+            AND DATEADD(DAY, 90, @TAKEOVER_DATE)
+            AND CLOSE_YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM') THEN SALES_COMMISSIONABLE
+            ELSE 0
+        END
+    ) AS SALES_COMMISSIONABLE,
+    SUM(
+        CASE
+            WHEN IMPLANTED_DT BETWEEN @TAKEOVER_DATE
+            AND DATEADD(DAY, 90, @TAKEOVER_DATE)
+            AND IMPLANTED_YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM') THEN IMPLANT_UNITS
+            ELSE 0
+        END
+    ) AS IMPLANT_UNITS
+FROM
+    qry_COMP_TM_DETAIL
+WHERE
+    SALES_CREDIT_REP_EMAIL = @CS_EMAIL
+GROUP BY
+    SALES_CREDIT_REP_EMAIL;
+
+
+/* ELIGIBLE ONLY IF THE RESULTS FROM THE PREVIOUS QUERY ARE 
+ >= TO THE RESULTS FROM THE QUERY BELOW */
+SELECT
+    ROUND(
+        (
+            SUM(
+                CASE
+                    WHEN CLOSEDATE BETWEEN DATEADD(MONTH, -6, @TAKEOVER_DATE)
+                    AND @TAKEOVER_DATE THEN SALES_COMMISSIONABLE
+                    ELSE 0
+                END
+            ) / 6
+        ) * 0.8,
+        0
+    ) AS SALES_COMMISSIONABLE,
+    (
+        SUM(
+            CASE
+                WHEN IMPLANTED_DT BETWEEN DATEADD(MONTH, -6, @TAKEOVER_DATE)
+                AND @TAKEOVER_DATE THEN IMPLANT_UNITS
+                ELSE 0
+            END
+        ) / 6
+    ) * 0.8 AS IMPLANT_UNITS
+FROM
+    qry_COMP_TM_DETAIL
+WHERE
+    ACT_ID IN (
+        SELECT
+            ACT_ID
+        FROM
+            qryAlign_Act
+        WHERE
+            OWNER_EMAIL = @CS_EMAIL
+            AND ST_DT = @TAKEOVER_DATE
+    )
+    AND CLOSEDATE BETWEEN DATEADD(MONTH, -6, @TAKEOVER_DATE)
+    AND @TAKEOVER_DATE
