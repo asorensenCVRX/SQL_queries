@@ -152,7 +152,10 @@ Q AS (
         CASE
             WHEN P.[STATUS] NOT IN ('Active', 'Dormant', 'Churned', 'At-Risk') THEN NULL
             ELSE P.[STATUS]
-        END AS STAGE
+        END AS STAGE,
+        A.SHIPPINGCITY,
+        A.SHIPPINGSTATECODE,
+        A.SHIPPINGPOSTALCODE
     FROM
         sfdcAccount A
         LEFT JOIN sfdcUser U ON A.OWNERID = U.ID
