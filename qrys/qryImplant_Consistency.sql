@@ -2,8 +2,9 @@
 WITH MonthlyImplants AS (
     -- Step 1: Extract YYYYMM as an integer
     SELECT
-        DISTINCT ACT_ID,
-        CAST(FORMAT(IMPLANTED_DT, 'yyyyMM') AS INT) AS YYYYMM
+        ACT_ID,
+        CAST(FORMAT(IMPLANTED_DT, 'yyyyMM') AS INT) AS YYYYMM,
+        SUM(IMPLANT_UNITS) [IMPLANT_UNITS]
     FROM
         tmpOpps
     WHERE
@@ -11,12 +12,16 @@ WITH MonthlyImplants AS (
         AND OPP_STATUS = 'CLOSED'
         AND ISIMPL = 1
         AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' -- AND REASON_FOR_IMPLANT__C = 'De novo'
+    GROUP BY
+        ACT_ID,
+        CAST(FORMAT(IMPLANTED_DT, 'yyyyMM') AS INT)
 ),
 OrderedData AS (
     -- Step 2: Determine previous month for each account
     SELECT
         ACT_ID,
         YYYYMM,
+        IMPLANT_UNITS,
         LAG(YYYYMM) OVER (
             PARTITION BY ACT_ID
             ORDER BY
@@ -35,6 +40,7 @@ StreakGroups AS (
     SELECT
         ACT_ID,
         CONCAT(Left(YYYYMM, 4), '_', RIGHT(YYYYMM, 2)) AS YYYYMM,
+        IMPLANT_UNITS,
         SUM(
             CASE
                 WHEN Prev_YYYYMM IS NULL
@@ -72,6 +78,7 @@ ACCTS AS (
 SELECT
     ISNULL(ACT_ID, ID) AS ACT_ID,
     ISNULL(IMPLANT_YYYYMM, YYYYMM) AS IMPLANT_YYYYMM,
+    isnull(IMPLANT_UNITS, 0) [IMPLANT_UNITS],
     ISNULL(
         CALC.Consecutive_Months,
         ACCTS.Consecutive_Months
@@ -81,6 +88,7 @@ FROM
         SELECT
             ACT_ID AS ACT_ID,
             StreakGroups.YYYYMM AS IMPLANT_YYYYMM,
+            IMPLANT_UNITS,
             COUNT(*) OVER (
                 PARTITION BY ACT_ID,
                 Streak_Group
