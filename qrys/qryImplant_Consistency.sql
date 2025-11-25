@@ -55,33 +55,45 @@ StreakGroups AS (
     FROM
         OrderedData
 ),
-ACCTS AS (
-    -- Step 4: bring in all accounts and tie them to last month
+MNTHS AS (
+    -- Generate all months for each account in MonthlyImplants from the month of their first implant to last month
     SELECT
-        DISTINCT ID,
-        YYYYMM,
+        DISTINCT I.ACT_ID,
+        C.YYYYMM,
         0 AS Consecutive_Months
     FROM
-        sfdcAccount
+        MonthlyImplants AS I
         CROSS JOIN (
             SELECT
                 DISTINCT YYYYMM
             FROM
                 qryCalendar
             WHERE
-                YYYYMM BETWEEN '2021_01'
-                AND FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+                YYYYMM <= FORMAT(GETDATE(), 'yyyy_MM')
         ) AS C
     WHERE
-        SHIPPINGCOUNTRYCODE = 'US'
-) -- Count months in each streak group,
+        C.YYYYMM >= (
+            SELECT
+                MIN(
+                    CONCAT(
+                        LEFT(CONVERT(varchar(6), MI.YYYYMM), 4),
+                        '_',
+                        RIGHT(CONVERT(varchar(6), MI.YYYYMM), 2)
+                    )
+                )
+            FROM
+                MonthlyImplants AS MI
+            WHERE
+                MI.ACT_ID = I.ACT_ID
+        )
+)
 SELECT
-    ISNULL(ACT_ID, ID) AS ACT_ID,
+    ISNULL(CALC.ACT_ID, MNTHS.ACT_ID) AS ACT_ID,
     ISNULL(IMPLANT_YYYYMM, YYYYMM) AS IMPLANT_YYYYMM,
     isnull(IMPLANT_UNITS, 0) [IMPLANT_UNITS],
     ISNULL(
         CALC.Consecutive_Months,
-        ACCTS.Consecutive_Months
+        MNTHS.Consecutive_Months
     ) AS CONSECUTIVE_MONTHS
 FROM
     (
@@ -89,6 +101,7 @@ FROM
             ACT_ID AS ACT_ID,
             StreakGroups.YYYYMM AS IMPLANT_YYYYMM,
             IMPLANT_UNITS,
+            -- Count months in each streak group
             COUNT(*) OVER (
                 PARTITION BY ACT_ID,
                 Streak_Group
@@ -98,5 +111,5 @@ FROM
         FROM
             StreakGroups
     ) AS CALC FULL
-    OUTER JOIN ACCTS ON ACCTS.ID = CALC.ACT_ID
-    AND ACCTS.YYYYMM = CALC.IMPLANT_YYYYMM
+    OUTER JOIN MNTHS ON MNTHS.ACT_ID = CALC.ACT_ID
+    AND MNTHS.YYYYMM = CALC.IMPLANT_YYYYMM;
