@@ -33,6 +33,7 @@ WITH A AS (
         M.REP,
         M.REP_EMAIL,
         M.REGION,
+        TERR_ID,
         M.[Definitive ID],
         M.PROVIDER_ID,
         M.ZIP_5,
@@ -52,6 +53,7 @@ WITH A AS (
                 ISNULL(B.NAME_REP, e.NAME_REP) AS [REP],
                 ISNULL(B.REP_EMAIL, E.REP_EMAIL) AS [REP_EMAIL],
                 ISNULL(B.REGION, e.REGION) AS [REGION],
+                E.TERR_ID,
                 (c.cbsa + ' - ' + c.cbsa_name) [CBSA],
                 C.NAME,
                 c.id,
@@ -165,6 +167,7 @@ WITH A AS (
                 ISNULL(E.NAME_REP, 'Unassigned') AS [REP],
                 ISNULL(E.REP_EMAIL, 'Unassigned') AS [REP_EMAIL],
                 ISNULL(E.REGION, 'Unassigned') AS [REGION],
+                E.TERR_ID,
                 --     ISNULL(B.TERRITORY, 'Unassigned') AS [TERRITORY], 
                 -- ISNULL(ISNULL(ISNULL(ISNULL(E.OWNER_EMAIL, f.OWNER_EMAIL), g.OWNER_EMAIL), f2.OWNER_EMAIL), f3.OWNER_EMAIL) AS [REP_OWNER_EMAIL], 
                 --   [CSA ID], 
@@ -668,7 +671,9 @@ Q AS
                 X.ACT_OWNER,
                 X.REP_EMAIL,
                 X.REP,
-                X.REGION,
+                ISNULL(T.REGION_NM, X.REGION) AS REGION,
+                ISNULL(D.DE_FACTO_TERR, X.TERR_ID) AS DE_FACTO_TERR_ID,
+                T.TERR_NM,
                 CASE
                     WHEN TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID])) = '0' THEN NULL
                     ELSE TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID]))
@@ -756,6 +761,7 @@ Q AS
                         A.REP_EMAIL,
                         A.REP,
                         A.REGION,
+                        A.TERR_ID,
                         CAST(
                             ISNULL(A.[Definitive ID], B.DHC_ACCOUNT_ID__C) AS VARCHAR(MAX)
                         ) AS [Definitive ID],
@@ -802,6 +808,34 @@ Q AS
                             WHEN TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID]) THEN 2
                         END
                 ) AS Z
+                /* bring in de-facto territory assignments */
+                LEFT JOIN qryDE_FACTO_ASSIGNMENTS D ON X.SFDC_ID = D.ACT_ID
+                /* bring in territory names */
+                LEFT JOIN (
+                    SELECT
+                        T.TERRITORY_ID,
+                        ISNULL(
+                            R.TERR_NM,
+                            CONCAT(T.TERRITORY, ' (OPEN)')
+                        ) AS TERR_NM,
+                        T.REGION_ID,
+                        T.REGION AS REGION_NM,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY T.TERRITORY_ID
+                            ORDER BY
+                                T.END_DT DESC
+                        ) AS RN
+                    FROM
+                        tblTerritory T
+                        LEFT JOIN qryRoster R ON T.TERRITORY_ID = R.TERRITORY_ID
+                        AND R.ROLE = 'REP'
+                        AND R.[isLATEST?] = 1
+                        AND R.[STATUS] = 'ACTIVE'
+                    WHERE
+                        T.TERRITORY_ID NOT LIKE '%OFF'
+                        AND T.TERRITORY_ID NOT LIKE 'MDR%'
+                        AND T.END_DT > GETDATE()
+                ) AS T ON ISNULL(D.DE_FACTO_TERR, X.TERR_ID) = T.TERRITORY_ID
         ) AS Y
         LEFT JOIN CM ON Y.SFDC_ID = CM.ACT_ID
         LEFT JOIN BP ON Y.SFDC_ID = BP.Account__c
@@ -811,4 +845,4 @@ SELECT
 FROM
     Q
 WHERE
-    [EXCLUDE?] = 'NO'
+    [EXCLUDE?] = 'NO';
