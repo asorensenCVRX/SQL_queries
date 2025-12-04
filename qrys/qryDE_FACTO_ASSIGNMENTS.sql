@@ -1,4 +1,5 @@
-CREATE VIEW qryDE_FACTO_ASSIGNMENTS AS WITH PY_SALES AS (
+-- CREATE VIEW qryDE_FACTO_ASSIGNMENTS AS 
+WITH PY_SALES AS (
     SELECT
         ACCOUNT_INDICATION__C,
         ACT_ID,
@@ -114,10 +115,13 @@ Q AS (
     SELECT
         A.NAME AS ACT_NAME,
         A.ID AS ACT_ID,
-        CASE
-            WHEN P.Tier IS NULL THEN 4
-            ELSE P.Tier
-        END AS TIER,
+        ISNULL(
+            CASE
+                WHEN TRY_CAST(LEFT(C.Account_Tier__c, 1) AS INT) = 0 THEN 4
+                ELSE TRY_CAST(LEFT(C.Account_Tier__c, 1) AS INT)
+            END,
+            4
+        ) AS TIER,
         A.DHC_IDN_NAME__C AS IDN,
         U.EMAIL AS SFDC_OWNER,
         R.TERRITORY_ID AS REP_TERR,
@@ -149,10 +153,10 @@ Q AS (
             AND OVERLAP_FLAG = 1 THEN E.OWNERSHIP_OVERRIDE_TERR_ID
             ELSE Z.TERR_ID
         END AS DE_FACTO_TERR,
-        CASE
-            WHEN P.[STATUS] NOT IN ('Active', 'Dormant', 'Churned', 'At-Risk') THEN NULL
-            ELSE P.[STATUS]
-        END AS STAGE,
+        -- CASE
+        --     WHEN P.[STATUS] NOT IN ('Active', 'Dormant', 'Churned', 'At-Risk') THEN NULL
+        --     ELSE P.[STATUS]
+        -- END AS STAGE,
         A.SHIPPINGCITY,
         A.SHIPPINGSTATECODE,
         A.SHIPPINGPOSTALCODE
@@ -179,8 +183,7 @@ Q AS (
             WHEN E.OVERLAP_FLAG = 1 THEN 'Open Territory'
             ELSE E.COVERAGE_TYPE
         END = E.COVERAGE_TYPE
-        LEFT JOIN tmpProgram_KPI P ON A.ID = P.SFDC_ID
-        AND P.[EXCLUDE?] = 'NO'
+        LEFT JOIN qryCust C ON A.ID = C.ID
         LEFT JOIN R12 ON R12.ACT_ID = A.ID
     WHERE
         A.RECORDTYPEID = '012700000009c1fAAA'
