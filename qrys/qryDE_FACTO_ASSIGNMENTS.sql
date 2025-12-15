@@ -47,12 +47,12 @@ R12 AS (
                 ACCOUNT_INDICATION__C,
                 ACT_ID,
                 CASE
-                    WHEN CLOSE_YYYYMM BETWEEN FORMAT(DATEADD(MONTH, -13, GETDATE()), 'yyyy_MM')
+                    WHEN CLOSE_YYYYMM BETWEEN FORMAT(DATEADD(MONTH, -12, GETDATE()), 'yyyy_MM')
                     AND FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM') THEN SALES
                     ELSE NULL
                 END AS [SALES_R12],
                 CASE
-                    WHEN IMPLANTED_YYYYMM BETWEEN FORMAT(DATEADD(MONTH, -13, GETDATE()), 'yyyy_MM')
+                    WHEN IMPLANTED_YYYYMM BETWEEN FORMAT(DATEADD(MONTH, -12, GETDATE()), 'yyyy_MM')
                     AND FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM') THEN IMPLANT_UNITS
                     ELSE NULL
                 END AS [IMPLANTS_R12]
