@@ -193,7 +193,8 @@ Q AS (
 )
 SELECT
     Q.*,
-    T.REGION
+    T.REGION,
+    T.REGION_ID
 FROM
     Q
     LEFT JOIN tblTerritory T ON Q.DE_FACTO_TERR = T.TERRITORY_ID
