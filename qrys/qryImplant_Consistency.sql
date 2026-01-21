@@ -86,30 +86,59 @@ MNTHS AS (
             WHERE
                 MI.ACT_ID = I.ACT_ID
         )
+),
+Q AS (
+    SELECT
+        ISNULL(CALC.ACT_ID, MNTHS.ACT_ID) AS ACT_ID,
+        ISNULL(IMPLANT_YYYYMM, YYYYMM) AS IMPLANT_YYYYMM,
+        isnull(IMPLANT_UNITS, 0) [IMPLANT_UNITS],
+        ISNULL(
+            CALC.Consecutive_Months,
+            MNTHS.Consecutive_Months
+        ) AS CONSECUTIVE_MONTHS
+    FROM
+        (
+            SELECT
+                ACT_ID AS ACT_ID,
+                StreakGroups.YYYYMM AS IMPLANT_YYYYMM,
+                IMPLANT_UNITS,
+                -- Count months in each streak group
+                COUNT(*) OVER (
+                    PARTITION BY ACT_ID,
+                    Streak_Group
+                    ORDER BY
+                        StreakGroups.YYYYMM ROWS UNBOUNDED PRECEDING
+                ) AS Consecutive_Months
+            FROM
+                StreakGroups
+        ) AS CALC FULL
+        OUTER JOIN MNTHS ON MNTHS.ACT_ID = CALC.ACT_ID
+        AND MNTHS.YYYYMM = CALC.IMPLANT_YYYYMM
 )
 SELECT
-    ISNULL(CALC.ACT_ID, MNTHS.ACT_ID) AS ACT_ID,
-    ISNULL(IMPLANT_YYYYMM, YYYYMM) AS IMPLANT_YYYYMM,
-    isnull(IMPLANT_UNITS, 0) [IMPLANT_UNITS],
-    ISNULL(
-        CALC.Consecutive_Months,
-        MNTHS.Consecutive_Months
-    ) AS CONSECUTIVE_MONTHS
+    *,
+    IMPLANTS_R6 / 6.0 AS R6_AVG_IMPL
 FROM
     (
         SELECT
-            ACT_ID AS ACT_ID,
-            StreakGroups.YYYYMM AS IMPLANT_YYYYMM,
-            IMPLANT_UNITS,
-            -- Count months in each streak group
-            COUNT(*) OVER (
-                PARTITION BY ACT_ID,
-                Streak_Group
+            *,
+            SUM(IMPLANT_UNITS) OVER (
+                PARTITION BY ACT_ID
                 ORDER BY
-                    StreakGroups.YYYYMM ROWS UNBOUNDED PRECEDING
-            ) AS Consecutive_Months
+                    IMPLANT_YYYYMM ROWS BETWEEN 5 PRECEDING
+                    AND CURRENT ROW
+            ) AS IMPLANTS_R6,
+            SUM(
+                CASE
+                    WHEN CONSECUTIVE_MONTHS <> 0 THEN 1
+                    ELSE 0
+                END
+            ) OVER (
+                PARTITION BY ACT_ID
+                ORDER BY
+                    IMPLANT_YYYYMM ROWS BETWEEN 5 PRECEDING
+                    AND CURRENT ROW
+            ) AS R6_MONTHS_W_IMPLANT
         FROM
-            StreakGroups
-    ) AS CALC FULL
-    OUTER JOIN MNTHS ON MNTHS.ACT_ID = CALC.ACT_ID
-    AND MNTHS.YYYYMM = CALC.IMPLANT_YYYYMM;
+            Q
+    ) AS A
