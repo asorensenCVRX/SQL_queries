@@ -533,7 +533,8 @@ CM AS (
     SELECT
         *,
         CASE
-            WHEN CONSECUTIVE_MONTHS >= 6 THEN 1
+            WHEN [R6_MONTHS_W_IMPLANT] >= 4
+            AND [R6_AVG_IMPL] >= 1 THEN 1
             ELSE 0
         END AS [CONSISTENCY_METRIC_MET?]
     FROM
@@ -559,6 +560,8 @@ Q AS
 (
     SELECT
         Y.*,
+        CM.[R6_MONTHS_W_IMPLANT],
+        CM.[R6_AVG_IMPL],
         ISNULL(CM.CONSECUTIVE_MONTHS, 0) AS CONSISTENCY,
         ISNULL(CM.[CONSISTENCY_METRIC_MET?], 0) AS [CONSISTENCY_METRIC_MET?],
         CASE
@@ -729,7 +732,7 @@ Q AS
                     4
                 ) AS [Tier],
                 CASE
-                    WHEN [IMPLANTS (ALL)] >= 20 THEN 1
+                    WHEN X.[IMPLANTS (ALL)] >= 15 THEN 1
                     ELSE 0
                 END AS [VOLUME_METRIC_MET?],
                 CASE
