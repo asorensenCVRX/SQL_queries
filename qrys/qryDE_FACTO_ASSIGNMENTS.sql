@@ -8,9 +8,8 @@ WITH PY_SALES AS (
         tmpOpps
     WHERE
         CLOSE_YYYY = YEAR(DATEADD(YEAR, -1, GETDATE()))
-        AND OPP_STATUS = 'CLOSED'
-        AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
-        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+        AND OPP_STATUS = 'CLOSED' -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
+        -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         AND SALES <> 0
         AND OPP_COUNTRY = 'US'
     GROUP BY
@@ -26,10 +25,24 @@ CY_SALES AS (
         tmpOpps
     WHERE
         CLOSE_YYYY = YEAR(GETDATE())
-        AND OPP_STATUS = 'CLOSED'
-        AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
-        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+        AND OPP_STATUS = 'CLOSED' -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
+        -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         AND SALES <> 0
+        AND OPP_COUNTRY = 'US'
+    GROUP BY
+        ACCOUNT_INDICATION__C,
+        ACT_ID
+),
+ALL_TIME AS (
+    SELECT
+        ACCOUNT_INDICATION__C,
+        ACT_ID,
+        SUM(SALES) AS [REV_$ (ALL)],
+        SUM(IMPLANT_UNITS) AS [IMPLANTS (ALL)]
+    FROM
+        tmpOpps
+    WHERE
+        OPP_STATUS = 'CLOSED'
         AND OPP_COUNTRY = 'US'
     GROUP BY
         ACCOUNT_INDICATION__C,
@@ -39,8 +52,8 @@ R12 AS (
     SELECT
         ACCOUNT_INDICATION__C,
         ACT_ID,
-        SUM(SALES_R12) AS SALES_R12,
-        SUM(IMPLANTS_R12) AS IMPLANTS_R12
+        SUM(SALES_R12) AS [REV_$ (R12)],
+        SUM(IMPLANTS_R12) AS [IMPLANTS (R12)]
     FROM
         (
             SELECT
@@ -59,9 +72,40 @@ R12 AS (
             FROM
                 tmpOpps
             WHERE
-                OPP_STATUS = 'CLOSED'
-                AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
-                AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+                OPP_STATUS = 'CLOSED' -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
+                -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+                AND OPP_COUNTRY = 'US'
+        ) AS A
+    GROUP BY
+        ACCOUNT_INDICATION__C,
+        ACT_ID
+),
+R6 AS (
+    SELECT
+        ACCOUNT_INDICATION__C,
+        ACT_ID,
+        SUM(SALES_R6) AS [REV_$ (R6)],
+        SUM(IMPLANTS_R6) AS [IMPLANTS (R6)]
+    FROM
+        (
+            SELECT
+                ACCOUNT_INDICATION__C,
+                ACT_ID,
+                CASE
+                    WHEN CLOSE_YYYYMM BETWEEN FORMAT(DATEADD(MONTH, -6, GETDATE()), 'yyyy_MM')
+                    AND FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM') THEN SALES
+                    ELSE NULL
+                END AS [SALES_R6],
+                CASE
+                    WHEN IMPLANTED_YYYYMM BETWEEN FORMAT(DATEADD(MONTH, -6, GETDATE()), 'yyyy_MM')
+                    AND FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM') THEN IMPLANT_UNITS
+                    ELSE NULL
+                END AS [IMPLANTS_R6]
+            FROM
+                tmpOpps
+            WHERE
+                OPP_STATUS = 'CLOSED' -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
+                -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
                 AND OPP_COUNTRY = 'US'
         ) AS A
     GROUP BY
@@ -143,10 +187,14 @@ Q AS (
         END AS [TERRITORY_MISMATCH?],
         E.TERR_ID AS OVERRIDE_TERR,
         E.COVERAGE_TYPE,
+        ALL_TIME.[REV_$ (ALL)],
+        ALL_TIME.[IMPLANTS (ALL)],
+        R12.[REV_$ (R12)],
+        R12.[IMPLANTS (R12)],
+        R6.[REV_$ (R6)],
+        R6.[IMPLANTS (R6)],
         PY_SALES.SALES_PY,
         CY_SALES.SALES_CY,
-        R12.SALES_R12,
-        R12.IMPLANTS_R12,
         CASE
             WHEN COVERAGE_TYPE = 'Ownership Override' THEN E.TERR_ID
             WHEN COVERAGE_TYPE = 'Open Territory'
@@ -174,6 +222,7 @@ Q AS (
         ) = Z.ZIP_CODE
         LEFT JOIN PY_SALES ON PY_SALES.ACT_ID = A.ID
         LEFT JOIN CY_SALES ON CY_SALES.ACT_ID = A.ID
+        LEFT JOIN ALL_TIME ON ALL_TIME.ACT_ID = A.ID
         LEFT JOIN E ON A.ID = E.SFDC_ID
         AND(
             E."END" IS NULL
@@ -185,6 +234,7 @@ Q AS (
         END = E.COVERAGE_TYPE
         LEFT JOIN qryCust C ON A.ID = C.ID
         LEFT JOIN R12 ON R12.ACT_ID = A.ID
+        LEFT JOIN R6 ON R6.ACT_ID = A.ID
     WHERE
         A.RECORDTYPEID = '012700000009c1fAAA'
         AND UPPER(A.NAME) NOT LIKE '%TEST%'
@@ -194,7 +244,8 @@ Q AS (
 SELECT
     Q.*,
     T.REGION,
-    T.REGION_ID
+    T.REGION_ID,
+    T.TERRITORY AS DE_FACTO_TERR_NM
 FROM
     Q
     LEFT JOIN tblTerritory T ON Q.DE_FACTO_TERR = T.TERRITORY_ID
