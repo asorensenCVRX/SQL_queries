@@ -8,7 +8,7 @@ WITH SALES AS (
         tmpOpps
     WHERE
         (
-            CLOSE_YYYY = '2025'
+            CLOSE_YYYY IN (2025, 2026)
             OR IMPLANTED_YYYY = '2025'
         )
         AND OPP_COUNTRY = 'US' -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
@@ -64,23 +64,47 @@ FROM
                     RL.NAME_REP,
                     RL.REGION_NM,
                     REGION_ID,
-                    CLOSEDATE,
                     ISNULL(
+                        EOMONTH(
+                            DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+                        ),
+                        CLOSEDATE
+                    ) AS CLOSEDATE,
+                    COALESCE(
+                        S.YYYYMM,
                         CLOSE_YYYYMM,
                         FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
                     ) AS CLOSE_YYYYMM,
-                    CLOSE_YYYYQQ,
+                    CASE
+                        WHEN S.YYYYMM IS NOT NULL THEN CONCAT(
+                            LEFT(S.YYYYMM, 4),
+                            '_Q',
+                            DATEPART(
+                                QUARTER,
+                                DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+                            )
+                        )
+                        ELSE CLOSE_YYYYQQ
+                    END AS CLOSE_YYYYQQ,
                     IMPLANTED_DT,
                     IMPLANTED_YYYYMM,
                     IMPLANTED_YYYYQQ,
                     ACCOUNT_INDICATION__C,
                     ACT_ID,
                     NAME AS OPP_NAME,
-                    OPP_ID,
+                    SALES.OPP_ID,
                     PHYSICIAN,
                     PHYSICIAN_ID,
-                    ISNULL(SALES, 0) AS SALES,
-                    ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
+                    CASE
+                        WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * SALES
+                        ELSE ISNULL(SALES, 0)
+                    END AS SALES,
+                    -- ISNULL(SALES, 0) AS SALES,
+                    CASE
+                        WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * SALES_COMMISSIONABLE
+                        ELSE ISNULL(SALES_COMMISSIONABLE, 0)
+                    END AS SALES_COMMISSIONABLE,
+                    -- ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
                     SUM(
                         CASE
                             WHEN STAGENAME = 'Revenue Recognized' THEN (ISNULL(SALES_COMMISSIONABLE, 0))
@@ -96,8 +120,16 @@ FROM
                         WHEN STAGENAME = 'Revenue Recognized' THEN 1
                         ELSE 0
                     END AS [REG_ALIGN_ELIGIBLE?],
-                    ISNULL(IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
-                    ISNULL(REVENUE_UNITS, 0) AS REVENUE_UNITS,
+                    CASE
+                        WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * IMPLANT_UNITS
+                        ELSE ISNULL(IMPLANT_UNITS, 0)
+                    END AS IMPLANT_UNITS,
+                    -- ISNULL(IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
+                    CASE
+                        WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * REVENUE_UNITS
+                        ELSE ISNULL(REVENUE_UNITS, 0)
+                    END AS REVENUE_UNITS,
+                    -- ISNULL(REVENUE_UNITS, 0) AS REVENUE_UNITS,
                     REASON_FOR_IMPLANT__C,
                     STAGENAME
                 FROM
@@ -107,6 +139,9 @@ FROM
                     AND SALES.CLOSE_YYYYMM >= RL.ACTIVE_YYYYMM
                     /* ensure no credit is given for sales after DOT */
                     AND SALES.CLOSEDATE <= ISNULL(DOT, '2099-12-31')
+                    /* sales splits */
+                    LEFT JOIN tblSalesSplits S ON S.OPP_ID = SALES.OPP_ID
+                    AND S.OPP_ID NOT IN ('006UY00000PpE5lYAF', '006UY00000U6L5LYAV')
             ) AS A
             /* bring in CS targets */
             LEFT JOIN tblACCT_TGT FTP ON A.SALES_CREDIT_CS_EMAIL = FTP.EMAIL

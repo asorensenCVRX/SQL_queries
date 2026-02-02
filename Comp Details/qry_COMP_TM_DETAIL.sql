@@ -52,16 +52,22 @@ OPPS AS (
     SELECT
         /* DISTINCT must be included so that if a CS has an account target and a physician target that overlap on an opp
          they are not double counted. */
-        DISTINCT CASE
-            WHEN O.OPP_ID = '006UY00000PpE5lYAF' THEN '2025-09-30 00:00:00.0000000'
-            ELSE CLOSEDATE
-        END AS CLOSEDATE,
+        DISTINCT ISNULL(
+            EOMONTH(
+                DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+            ),
+            CLOSEDATE
+        ) AS CLOSEDATE,
+        ISNULL(S.YYYYMM, CLOSE_YYYYMM) AS CLOSE_YYYYMM,
         CASE
-            WHEN O.OPP_ID = '006UY00000PpE5lYAF' THEN '2025_09'
-            ELSE CLOSE_YYYYMM
-        END AS CLOSE_YYYYMM,
-        CASE
-            WHEN O.OPP_ID = '006UY00000PpE5lYAF' THEN '2025_Q3'
+            WHEN S.YYYYMM IS NOT NULL THEN CONCAT(
+                LEFT(S.YYYYMM, 4),
+                '_Q',
+                DATEPART(
+                    QUARTER,
+                    DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+                )
+            )
             ELSE CLOSE_YYYYQQ
         END AS CLOSE_YYYYQQ,
         IMPLANTED_DT,
@@ -184,7 +190,7 @@ OPPS AS (
             'Hypertension'
         )
         AND (
-            CLOSE_YYYY = 2025
+            CLOSE_YYYY IN (2025, 2026)
             OR IMPLANTED_YYYY = 2025
         )
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')

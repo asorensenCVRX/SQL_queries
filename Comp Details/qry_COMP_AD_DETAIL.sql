@@ -47,9 +47,24 @@ ALIGNMENT AS (
 ),
 OPPS AS (
     SELECT
-        CLOSEDATE,
-        CLOSE_YYYYMM,
-        CLOSE_YYYYQQ,
+        ISNULL(
+            EOMONTH(
+                DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+            ),
+            CLOSEDATE
+        ) AS CLOSEDATE,
+        ISNULL(S.YYYYMM, CLOSE_YYYYMM) AS CLOSE_YYYYMM,
+        CASE
+            WHEN S.YYYYMM IS NOT NULL THEN CONCAT(
+                LEFT(S.YYYYMM, 4),
+                '_Q',
+                DATEPART(
+                    QUARTER,
+                    DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+                )
+            )
+            ELSE CLOSE_YYYYQQ
+        END AS CLOSE_YYYYQQ,
         IMPLANTED_DT,
         IMPLANTED_YYYYMM,
         IMPLANTED_YYYYQQ,
@@ -68,12 +83,35 @@ OPPS AS (
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
         ISIMPL,
-        IMPLANT_UNITS,
-        REVENUE_UNITS,
-        SALES,
-        SALES_COMMISSIONABLE,
-        AMOUNT,
-        ASP
+        CASE
+            WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * IMPLANT_UNITS
+            ELSE ISNULL(IMPLANT_UNITS, 0)
+        END AS IMPLANT_UNITS,
+        -- IMPLANT_UNITS,
+        CASE
+            WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * REVENUE_UNITS
+            ELSE ISNULL(REVENUE_UNITS, 0)
+        END AS REVENUE_UNITS,
+        -- REVENUE_UNITS,
+        CASE
+            WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * SALES
+            ELSE ISNULL(SALES, 0)
+        END AS SALES,
+        -- SALES,
+        CASE
+            WHEN S.SPLIT IS NOT NULL THEN S.SPLIT * SALES_COMMISSIONABLE
+            ELSE ISNULL(SALES_COMMISSIONABLE, 0)
+        END AS SALES_COMMISSIONABLE,
+        -- SALES_COMMISSIONABLE,
+        CASE
+            WHEN S.SPLIT IS NOT NULL THEN O.AMOUNT * S.SPLIT
+            ELSE O.AMOUNT
+        END AS AMOUNT,
+        -- AMOUNT,
+        CASE
+            WHEN S.SPLIT IS NOT NULL THEN O.ASP * S.SPLIT
+            ELSE O.ASP
+        END AS ASP -- O.ASP
     FROM
         tmpOpps O
         /* check tblAlign_Opp */
@@ -82,11 +120,13 @@ OPPS AS (
         LEFT JOIN tblAlign_Act AA ON O.ACT_ID = AA.ACT_ID
         AND O.CLOSEDATE BETWEEN AA.ST_DT
         AND AA.END_DT
+        LEFT JOIN tblSalesSplits S ON O.OPP_ID = S.OPP_ID
+        AND S.OPP_ID NOT IN ('006UY00000PpE5lYAF', '006UY00000U6L5LYAV')
     WHERE
         OPP_STATUS = 'CLOSED'
         AND SHIPPINGCOUNTRYCODE = 'US' -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         AND (
-            CLOSE_YYYY = 2025
+            CLOSE_YYYY IN (2025, 2026)
             OR IMPLANTED_YYYY = 2025
         )
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
