@@ -47,7 +47,7 @@ FROM
         FROM
             qryCalendar
         WHERE
-            LEFT(YYYYQQ, 4) = '2025'
+            LEFT(YYYYQQ, 4) = '2026'
     ) AS CAL ON RATES.YYYYQQ = CAL.YYYYQQ
     LEFT JOIN tblQuota Q ON Q.TERR_ID = RATES.TERRITORY_ID
     AND (

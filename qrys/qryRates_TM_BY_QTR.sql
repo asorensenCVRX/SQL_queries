@@ -13,7 +13,7 @@ FROM
             EID,
             [PLAN],
             NULL AS [THRESHOLD],
-            '2025_' + LEFT([QUARTER], 2) [YYYYQQ]
+            '2026_' + LEFT([QUARTER], 2) [YYYYQQ]
         FROM
             (
                 SELECT
@@ -35,7 +35,7 @@ FROM
             EID,
             NULL AS [QUOTA],
             [THRESHOLD],
-            '2025_' + LEFT([QUARTER], 2) [YYYYQQ]
+            '2026_' + LEFT([QUARTER], 2) [YYYYQQ]
         FROM
             (
                 SELECT
