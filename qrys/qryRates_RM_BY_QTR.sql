@@ -1,3 +1,4 @@
+-- CREATE VIEW qryRates_RM_BY_QTR AS
 SELECT
     T1.EID,
     REGION_ID,
@@ -13,7 +14,7 @@ FROM
             REGION_ID,
             [QUOTA],
             NULL AS [BL],
-            '2025_' + LEFT([QUARTER], 2) [YYYYQQ]
+            '2026_' + LEFT([QUARTER], 2) [YYYYQQ]
         FROM
             (
                 SELECT
@@ -35,7 +36,7 @@ FROM
             region_id,
             NULL AS [QUOTA],
             [BL],
-            '2025_' + LEFT([QUARTER], 2) [YYYYQQ]
+            '2026_' + LEFT([QUARTER], 2) [YYYYQQ]
         FROM
             (
                 SELECT
