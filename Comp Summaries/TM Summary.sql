@@ -1,12 +1,10 @@
 DECLARE @YYYYMM AS VARCHAR(7) = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM');
 
-
 DECLARE @YYYYQQ AS VARCHAR(7) = CONCAT(
     FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy'),
     '_Q',
     DATEPART(QUARTER, DATEADD(MONTH, -1, GETDATE()))
 );
-
 
 WITH DETAIL AS (
     SELECT
@@ -38,7 +36,7 @@ WITH DETAIL AS (
         MAX(
             CASE
                 WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
-                AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES_COMMISSIONABLE
+                AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_COMMISSIONABLE
                 ELSE 0
             END
         ) * 0.05 AS IMPLANT_ACCEL_TRUE_UP,
@@ -46,7 +44,7 @@ WITH DETAIL AS (
             MAX(
                 CASE
                     WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
-                    AND YYYYMM IN ('2025_03', '2025_06', '2025_09', '2025_12') THEN QTD_SALES_COMMISSIONABLE
+                    AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_COMMISSIONABLE
                     ELSE 0
                 END
             ) * 0.05
@@ -109,7 +107,7 @@ WITH DETAIL AS (
                 -- YTD implant units
                 SUM(
                     CASE
-                        WHEN YEAR(IMPLANTED_DT) = 2025
+                        WHEN YEAR(IMPLANTED_DT) = 2026
                         AND IMPLANTED_YYYYMM <= @YYYYMM THEN IMPLANT_UNITS_FOR_RATIO
                         ELSE 0
                     END
@@ -121,9 +119,9 @@ WITH DETAIL AS (
                             'HCA Healthcare',
                             'Department of Veterans Affairs'
                         )
-                        AND YEAR(IMPLANTED_DT) = 2025
+                        AND YEAR(IMPLANTED_DT) = 2026
                         AND IMPLANTED_YYYYMM <= @YYYYMM THEN REV_UNITS_FOR_RATIO
-                        WHEN YEAR(CLOSEDATE) = 2025
+                        WHEN YEAR(CLOSEDATE) = 2026
                         AND CLOSE_YYYYMM <= @YYYYMM
                         AND (
                             DHC_IDN_NAME__C NOT IN (
@@ -152,19 +150,6 @@ WITH DETAIL AS (
         THRESHOLD,
         [PLAN]
 ),
-CS_DED AS (
-    SELECT
-        SALES_CREDIT_REP_EMAIL,
-        CS_PO_YYYYMM,
-        SUM([CS_PO_$]) + SUM([CS_PO_%]) AS CS_DEDUCTION
-    FROM
-        qry_COMP_TM_DETAIL
-    WHERE
-        CS_PO_YYYYMM IS NOT NULL
-    GROUP BY
-        SALES_CREDIT_REP_EMAIL,
-        CS_PO_YYYYMM
-),
 PRGRM_ACCEL AS (
     SELECT
         SALES_CREDIT_REP_EMAIL,
@@ -177,10 +162,10 @@ PRGRM_ACCEL AS (
                 CLOSE_YYYYMM,
                 CLOSE_YYYYQQ,
                 CASE
-                    WHEN CLOSE_YYYYQQ = '2025_Q1' THEN '2025_03'
-                    WHEN CLOSE_YYYYQQ = '2025_Q2' THEN '2025_06'
-                    WHEN CLOSE_YYYYQQ = '2025_Q3' THEN '2025_09'
-                    WHEN CLOSE_YYYYQQ = '2025_Q4' THEN '2025_12'
+                    WHEN CLOSE_YYYYQQ = '2026_Q1' THEN '2026_03'
+                    WHEN CLOSE_YYYYQQ = '2026_Q2' THEN '2026_06'
+                    WHEN CLOSE_YYYYQQ = '2026_Q3' THEN '2026_09'
+                    WHEN CLOSE_YYYYQQ = '2026_Q4' THEN '2026_12'
                 END AS JOIN_KEY,
                 IMPLANTED_DT,
                 IMPLANTED_YYYYMM,
@@ -230,10 +215,9 @@ SELECT
     L2_REV,
     L1_PO,
     L2_PO,
-    ISNULL(CS_DEDUCTION, 0) AS CS_DEDUCTION,
     IMPLANT_ACCEL_TRUE_UP,
     ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS PROGRAM_ACCEL_PO,
-    TTL_PO - ISNULL(CS_DEDUCTION, 0) + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS TTL_PO,
+    TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS TTL_PO,
     IMPLANT_UNITS,
     REVENUE_UNITS,
     QTD_IMPL_REV_RATIO,
@@ -241,17 +225,17 @@ SELECT
     ISNULL(G.PO_AMT, 0) AS GAURANTEE_AMT,
     CASE
         WHEN ISNULL(G.PO_AMT, 0) > (
-            TTL_PO - ISNULL(CS_DEDUCTION, 0) + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
+            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
         ) THEN G.PO_AMT - (
-            TTL_PO - ISNULL(CS_DEDUCTION, 0) + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
+            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
         )
         ELSE 0
     END AS GAURANTEE_ADJ,
     CASE
         WHEN ISNULL(G.PO_AMT, 0) > (
-            TTL_PO - ISNULL(CS_DEDUCTION, 0) + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
+            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
         ) THEN G.PO_AMT
-        ELSE TTL_PO - ISNULL(CS_DEDUCTION, 0) + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
+        ELSE TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
     END AS PO_AMT
     /******/
     -- INTO tmpTM_PO
@@ -260,8 +244,6 @@ FROM
     DETAIL
     LEFT JOIN qryGuarantee G ON G.EMP_EMAIL = DETAIL.EID
     AND G.YYYYMM = DETAIL.YYYYMM
-    LEFT JOIN CS_DED ON CS_DED.CS_PO_YYYYMM = DETAIL.YYYYMM
-    AND DETAIL.EID = CS_DED.SALES_CREDIT_REP_EMAIL
     LEFT JOIN qryRoster R ON R.REP_EMAIL = DETAIL.EID
     AND R.[isLATEST?] = 1
     AND R.ROLE = 'REP'

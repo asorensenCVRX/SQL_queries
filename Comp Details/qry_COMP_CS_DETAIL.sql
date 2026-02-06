@@ -8,8 +8,8 @@ WITH SALES AS (
         tmpOpps
     WHERE
         (
-            CLOSE_YYYY IN (2025, 2026)
-            OR IMPLANTED_YYYY = '2025'
+            CLOSE_YYYY = 2026
+            OR IMPLANTED_YYYY = 2026
         )
         AND OPP_COUNTRY = 'US' -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')

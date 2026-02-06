@@ -17,7 +17,7 @@ WITH ROSTER AS (
             FROM
                 qryCalendar
             WHERE
-                year = 2025
+                year = 2026
                 AND YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
@@ -126,8 +126,8 @@ OPPS AS (
         OPP_STATUS = 'CLOSED'
         AND SHIPPINGCOUNTRYCODE = 'US' -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
         AND (
-            CLOSE_YYYY IN (2025, 2026)
-            OR IMPLANTED_YYYY = 2025
+            CLOSE_YYYY = 2026
+            OR IMPLANTED_YYYY = 2026
         )
         AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
         AND STAGENAME = 'Revenue Recognized'

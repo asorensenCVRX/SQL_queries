@@ -16,7 +16,7 @@ WITH ROSTER AS (
             FROM
                 qryCalendar
             WHERE
-                year = 2025
+                year = 2026
                 AND YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
@@ -138,18 +138,8 @@ OPPS AS (
             WHEN STAGENAME = 'Revenue Recognized'
             AND S.SPLIT IS NULL THEN O.ASP
             ELSE 0
-        END AS ASP,
+        END AS ASP
         /*****************************************************/
-        T.EMAIL AS CS_PO_EMAIL,
-        CASE
-            WHEN T.PO_TYPE = 'revenue' THEN ISNULL(T.PO_PER, 0) * REVENUE_UNITS
-            WHEN T.PO_TYPE = 'implant' THEN ISNULL(T.PO_PER, 0)
-        END AS PO_PER,
-        CASE
-            WHEN T.PO_TYPE = 'revenue' THEN SALES * ISNULL(T.[PO_%], 0)
-            WHEN T.PO_TYPE = 'implant' THEN ISNULL(T.[PO_%], 0)
-        END AS [PO_%],
-        T.PO_TYPE
     FROM
         tmpOpps O
         /* check tblAlign_Opp */
@@ -158,28 +148,6 @@ OPPS AS (
         LEFT JOIN qryAlign_Act AA ON O.ACT_ID = AA.ACT_ID
         AND O.CLOSEDATE BETWEEN AA.ST_DT
         AND AA.END_DT
-        /* check FCE payouts */
-        /* join obj_id from tblACCT_TGT on either account id or physician id, depending on the target */
-        LEFT JOIN tblACCT_TGT T ON CASE
-            WHEN T.[TYPE] = 'ACCT' THEN O.ACT_ID
-            WHEN T.[TYPE] = 'DOC' THEN O.PHYSICIAN_ID
-        END = T.OBJ_ID
-        /* if CS is paid on revenue, make sure the close date is valid for payment.
-         If CS is paid on implants, make sure the impalant date is valid for payment. */
-        AND CASE
-            WHEN T.PO_TYPE = 'implant' THEN O.IMPLANTED_YYYYMM
-            WHEN T.PO_TYPE = 'revenue' THEN O.CLOSE_YYYYMM
-        END BETWEEN T.YYYYMM_START
-        AND T.YYYYMM_END
-        /* If po_type is implant, only join on opps that have an implant.
-         If po_type is revenue, only join on opps that have revenue units */
-        AND CASE
-            WHEN T.PO_TYPE = 'implant' THEN O.ISIMPL
-            WHEN T.PO_TYPE = 'revenue' THEN O.REVENUE_UNITS
-        END >= 1
-        /* targets are only paid on de novo */
-        AND REASON_FOR_IMPLANT__C = 'De novo'
-        AND T.PO_TYPE IN ('implant', 'revenue')
         /* bring in tblSalesSplits so credit for opps can be shared */
         LEFT JOIN tblSalesSplits S ON O.OPP_ID = S.OPP_ID
     WHERE
@@ -190,10 +158,10 @@ OPPS AS (
             'Hypertension'
         )
         AND (
-            CLOSE_YYYY IN (2025, 2026)
-            OR IMPLANTED_YYYY = 2025
+            CLOSE_YYYY = 2026
+            OR IMPLANTED_YYYY = 2026
         )
-        AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
+        -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
         /* Must keep both 'Revenue Recognized' and 'Implant Completed' to calc CS deductions */
         AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
         /* Bring in t-splits */
@@ -229,15 +197,11 @@ OPPS AS (
         OG_OWNER_SALES_CREDIT,
         OG_OWNER_SALES_CREDIT,
         NULL,
-        ASP,
-        NULL,
-        NULL,
-        NULL,
-        NULL
+        ASP
     FROM
         qryTerritory_Split
     WHERE
-        YEAR(CLOSEDATE) = 2025
+        YEAR(CLOSEDATE) = 2026
 ),
 QUOTA AS (
     SELECT
@@ -390,16 +354,7 @@ FROM
                         ORDER BY
                             OPPS.CLOSEDATE,
                             OPPS.NAME
-                    ) AS QTD_REVENUE_UNITS,
-                    CS_PO_EMAIL,
-                    ISNULL(PO_PER, 0) AS [CS_PO_$],
-                    ISNULL([PO_%], 0) AS [CS_PO_%],
-                    PO_TYPE AS CS_PO_TYPE,
-                    CASE
-                        WHEN PO_TYPE = 'implant' THEN IMPLANTED_YYYYMM
-                        WHEN PO_TYPE = 'revenue' THEN CLOSE_YYYYMM
-                        ELSE NULL
-                    END AS CS_PO_YYYYMM
+                    ) AS QTD_REVENUE_UNITS
                 FROM
                     ROSTER FULL
                     OUTER JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
