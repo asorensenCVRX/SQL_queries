@@ -49,7 +49,12 @@ WITH DETAIL AS (
                 END
             ) * 0.05
         ) AS TTL_PO,
-        SUM(IMPLANT_UNITS) AS IMPLANT_UNITS,
+        SUM(
+            CASE
+                WHEN IMPLANTED_YYYYMM = @YYYYMM THEN IMPLANT_UNITS
+                ELSE 0
+            END
+        ) AS IMPLANT_UNITS,
         MAX(QTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(QTD_REV_UNITS), 0), 1) AS QTD_IMPL_REV_RATIO,
         MAX(YTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(YTD_REV_UNITS), 0), 1) AS YTD_IMPL_REV_RATIO,
         SUM(REVENUE_UNITS) AS REVENUE_UNITS
@@ -62,6 +67,7 @@ WITH DETAIL AS (
                 REGION_NM,
                 CLOSE_YYYYMM AS YYYYMM,
                 CLOSE_YYYYQQ AS YYYYQQ,
+                IMPLANTED_YYYYMM,
                 THRESHOLD,
                 [PLAN],
                 SALES_COMMISSIONABLE,
@@ -197,6 +203,42 @@ PRGRM_ACCEL AS (
     GROUP BY
         SALES_CREDIT_REP_EMAIL,
         JOIN_KEY
+),
+CPAS AS (
+    SELECT
+        ACCOUNT_OWNER_EMAIL,
+        CPAS_SUBMIT_YYYYMM,
+        SUM(TM_PO) AS TM_PO
+    FROM
+        (
+            SELECT
+                ISNULL(AA.OWNER_EMAIL, U.EMAIL) AS ACCOUNT_OWNER_EMAIL,
+                CPAS_SUBMIT_YYYYMM,
+                CASE
+                    WHEN ROW_NUMBER() OVER(
+                        PARTITION BY PATIENT__C
+                        ORDER BY
+                            CPAS_PA_SUB_DT
+                    ) = 1
+                    AND CPAS_SUBMIT_YYYYMM >= '2026_01' THEN 250
+                    ELSE 0
+                END AS TM_PO
+            FROM
+                qryCPAS_Cases C
+                LEFT JOIN sfdcAccount A ON A.ID = C.ACT_ID
+                LEFT JOIN qryAlign_Act AA ON AA.ACT_ID = C.ACT_ID
+                AND C.CPAS_PA_SUB_DT BETWEEN AA.ST_DT
+                AND AA.END_DT
+                LEFT JOIN sfdcUser U ON A.OWNERID = U.ID
+            WHERE
+                [isExcl?] = 0
+                AND CPAS_PA_SUB_DT IS NOT NULL
+        ) AS A
+    WHERE
+        CPAS_SUBMIT_YYYYMM >= '2026_01'
+    GROUP BY
+        ACCOUNT_OWNER_EMAIL,
+        CPAS_SUBMIT_YYYYMM
 )
 SELECT
     EID,
@@ -215,9 +257,10 @@ SELECT
     L2_REV,
     L1_PO,
     L2_PO,
+    ISNULL(CPAS.TM_PO, 0) AS CPAS_PO,
     IMPLANT_ACCEL_TRUE_UP,
     ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS PROGRAM_ACCEL_PO,
-    TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS TTL_PO,
+    TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) + ISNULL(CPAS.TM_PO, 0) AS TTL_PO,
     IMPLANT_UNITS,
     REVENUE_UNITS,
     QTD_IMPL_REV_RATIO,
@@ -226,16 +269,16 @@ SELECT
     CASE
         WHEN ISNULL(G.PO_AMT, 0) > (
             TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
-        ) THEN G.PO_AMT - (
-            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
+        ) + ISNULL(CPAS.TM_PO, 0) THEN G.PO_AMT - (
+            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) + ISNULL(CPAS.TM_PO, 0)
         )
         ELSE 0
     END AS GAURANTEE_ADJ,
     CASE
         WHEN ISNULL(G.PO_AMT, 0) > (
             TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
-        ) THEN G.PO_AMT
-        ELSE TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
+        ) + ISNULL(CPAS.TM_PO, 0) THEN G.PO_AMT
+        ELSE TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) + ISNULL(CPAS.TM_PO, 0)
     END AS PO_AMT
     /******/
     -- INTO tmpTM_PO
@@ -249,5 +292,7 @@ FROM
     AND R.ROLE = 'REP'
     LEFT JOIN PRGRM_ACCEL ON PRGRM_ACCEL.JOIN_KEY = DETAIL.YYYYMM
     AND PRGRM_ACCEL.SALES_CREDIT_REP_EMAIL = DETAIL.EID
+    LEFT JOIN CPAS ON CPAS.ACCOUNT_OWNER_EMAIL = DETAIL.EID
+    AND CPAS.CPAS_SUBMIT_YYYYMM = DETAIL.YYYYMM
 WHERE
     DETAIL.YYYYMM = @YYYYMM
