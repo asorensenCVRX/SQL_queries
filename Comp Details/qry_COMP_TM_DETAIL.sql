@@ -22,16 +22,16 @@ WITH ROSTER AS (
     WHERE
         (
             ROLE = 'REP'
-            OR REP_EMAIL IN (
-                'ldasilvacampos@cvrx.com',
-                'bkelly@cvrx.com',
-                'bsepulvado@cvrx.com',
-                'egorman@cvrx.com'
-            )
+            -- OR REP_EMAIL IN (
+            --     'ldasilvacampos@cvrx.com',
+            --     'bkelly@cvrx.com',
+            --     'bsepulvado@cvrx.com',
+            --     'egorman@cvrx.com'
+            -- )
         )
         /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
          or is null, and DOH is before or equal to last month. */
-        AND FORMAT(ISNULL(DOT, '2099-12-13'), 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')
+        AND FORMAT(ISNULL(DOT, '2099-12-13'), 'yyyy_MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         AND FORMAT(ISNULL(DOH, '1900-01-01'), 'yyyy_MM') <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
 ),
 ALIGNMENT AS (
@@ -160,8 +160,7 @@ OPPS AS (
         AND (
             CLOSE_YYYY = 2026
             OR IMPLANTED_YYYY = 2026
-        )
-        -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
+        ) -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
         /* Must keep both 'Revenue Recognized' and 'Implant Completed' to calc CS deductions */
         AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
         /* Bring in t-splits */
@@ -218,25 +217,120 @@ QUOTA AS (
         YYYYQQ,
         TERRITORY_ID,
         EID
-)
-SELECT
-    *,
-    L1_REV * 0.15 AS L1_PO,
-    L2_REV * 0.2 AS L2_PO
-FROM
-    (
-        SELECT
-            *,
-            /* If a rep's ACTIVE_YYYYMM is next month, but the rep has sales, ensure those sales are L1 revenue */
-            CASE
+),
+OPPS2 AS (
+    SELECT
+        ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) AS SALES_CREDIT_REP_EMAIL,
+        ISNULL(ALIGNMENT.NAME_REP, ROSTER.NAME_REP) AS NAME_REP,
+        OPPS.COVERAGE_TYPE,
+        OPPS.REP_TERR_ID,
+        OPPS.ZIP_TERR_ID,
+        OPPS.DE_FACTO_TERR_ID,
+        ISNULL(ALIGNMENT.REGION_NM, ROSTER.REGION) AS REGION_NM,
+        ISNULL(ALIGNMENT.REGION_ID, ROSTER.REGION_ID) AS REGION_ID,
+        OPPS.CLOSEDATE,
+        ISNULL(OPPS.CLOSE_YYYYMM, ROSTER.YYYYMM) AS CLOSE_YYYYMM,
+        ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ) AS CLOSE_YYYYQQ,
+        OPPS.IMPLANTED_DT,
+        OPPS.IMPLANTED_YYYYMM,
+        OPPS.IMPLANTED_YYYYQQ,
+        OPPS.DHC_IDN_NAME__C,
+        OPPS.ACCOUNT_INDICATION__C,
+        OPPS.ACT_ID,
+        OPPS.NAME AS OPP_NAME,
+        OPPS.OPP_ID,
+        OPPS.OPP_OWNER_EMAIL,
+        OPPS.PHYSICIAN,
+        OPPS.PHYSICIAN_ID,
+        OPPS.INDICATION_FOR_USE__C,
+        OPPS.REASON_FOR_IMPLANT__C,
+        OPPS.STAGENAME,
+        ISNULL(OPPS.ISIMPL, 0) AS ISIMPL,
+        ISNULL(OPPS.IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
+        CASE
+            WHEN OPPS.INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' THEN ISNULL(OPPS.IMPLANT_UNITS, 0)
+            ELSE 0
+        END AS IMPLANT_UNITS_FOR_RATIO,
+        ISNULL(OPPS.REVENUE_UNITS, 0) AS REVENUE_UNITS,
+        CASE
+            WHEN OPPS.INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' THEN CASE
+                WHEN OPPS.DHC_IDN_NAME__C IN (
+                    'HCA Healthcare',
+                    'Department of Veterans Affairs'
+                )
+                AND OPPS.IMPLANT_UNITS <> 0 THEN 1
+                WHEN OPPS.DHC_IDN_NAME__C IN (
+                    'HCA Healthcare',
+                    'Department of Veterans Affairs'
+                )
+                AND OPPS.IMPLANT_UNITS = 0 THEN 0
+                ELSE ISNULL(OPPS.REVENUE_UNITS, 0)
+            END
+            ELSE 0
+        END AS REV_UNITS_FOR_RATIO,
+        ISNULL(OPPS.SALES, 0) AS SALES,
+        ISNULL(OPPS.SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
+        CASE
+            WHEN ISNULL(AMOUNT, 0) <> OPPS.SALES THEN 1
+            ELSE 0
+        END AS [REBATE?],
+        ISNULL(ASP, 0) AS ASP,
+        THRESHOLD,
+        [PLAN],
+        SUM(ISNULL(OPPS.SALES_COMMISSIONABLE, 0)) OVER (
+            PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
+            ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ)
+            ORDER BY
+                ISNULL(OPPS.CLOSEDATE, ROSTER.MONTH_END_DATE),
+                ISNULL(OPPS.NAME, 'ZZZ')
+        ) AS QTD_SALES_COMISSIONABLE,
+        /* make sure implants are only counted based on impl date, not closedate */
+        SUM(ISNULL(OPPS.IMPLANT_UNITS, 0)) OVER(
+            PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
+            ISNULL(OPPS.IMPLANTED_YYYYQQ, ROSTER.YYYYQQ)
+            ORDER BY
+                ISNULL(OPPS.IMPLANTED_DT, OPPS.CLOSEDATE),
+                OPPS.NAME
+        ) AS QTD_IMPLANT_UNITS,
+        SUM(ISNULL(OPPS.REVENUE_UNITS, 0)) OVER(
+            PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
+            ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ)
+            ORDER BY
+                OPPS.CLOSEDATE,
+                OPPS.NAME
+        ) AS QTD_REVENUE_UNITS,
+        ATM.ATM_EMAIL
+    FROM
+        ROSTER FULL
+        OUTER JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
+        AND OPPS.CLOSE_YYYYMM = ROSTER.YYYYMM
+        LEFT JOIN QUOTA ON ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) = QUOTA.EID
+        AND ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ) = QUOTA.YYYYQQ
+        LEFT JOIN ALIGNMENT ON OPPS.SALES_CREDIT_REP_EMAIL = ALIGNMENT.REP_EMAIL
+        LEFT JOIN qry_COMP_ATM_DETAIL ATM ON ATM.OPP_ID = OPPS.OPP_ID
+),
+CALC AS (
+    SELECT
+        *,
+        /*sales to an ATM targeted account*/
+        CASE
+            WHEN ATM_EMAIL IS NOT NULL THEN SALES_COMMISSIONABLE
+            ELSE 0
+        END AS ATM_ACCOUNT_REVENUE,
+        CASE
+            /* L1_REV value is 0 if there is an ATM who gets credit */
+            WHEN ATM_EMAIL IS NOT NULL THEN 0
+            ELSE CASE
+                /* If a rep's ACTIVE_YYYYMM is next month, but the rep has sales, ensure those sales are L1 revenue */
                 WHEN THRESHOLD = 0 THEN SALES_COMMISSIONABLE
+                /*triggers only if ATM_EMAIL is null AND THRESHOLD <> 0*/
                 ELSE CASE
-                    /*Solve: if this sales is negative and we're still below threshold then sales  */
+                    /*if this sale is negative and we're still below threshold then sales*/
                     WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
                     AND ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN SALES_COMMISSIONABLE
-                    /*Solve: if were not currently above threshold then all Sales are in L1 still */
+                    /*if we are not currently above threshold then all sales are in L1 still*/
                     WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN ISNULL(SALES_COMMISSIONABLE, 0)
-                    /*Solve:   if we were NOT already above threshold then return a portion/all of this sale up to threshold*/
+                    /*if we were NOT already above threshold then return a portion/all of this sale up to threshold*/
                     WHEN (
                         ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
                     ) <= THRESHOLD THEN THRESHOLD - (
@@ -244,9 +338,14 @@ FROM
                     )
                     ELSE 0
                 END
-            END AS L1_REV,
-            CASE
+            END
+        END AS L1_REV,
+        CASE
+            /* L2_REV value is 0 if there is an ATM who gets credit */
+            WHEN ATM_EMAIL IS NOT NULL THEN 0
+            ELSE CASE
                 WHEN THRESHOLD = 0 THEN 0
+                /*triggers only if ATM_EMAIL is null AND THRESHOLD <> 0*/
                 ELSE CASE
                     /*Solve: if this sales is negative and we're currently l2 and previously were in l2 then sales  */
                     WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
@@ -269,98 +368,18 @@ FROM
                     AND ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN SALES_COMMISSIONABLE
                     /*Solve: if we are now at/passed threshold and currently less than quota then take the sales over the threshold */
                     WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN ISNULL(QTD_SALES_COMISSIONABLE, 0) - THRESHOLD
-                    ELSE NULL
+                    ELSE 0
                 END
-            END L2_REV,
-            QTD_IMPLANT_UNITS / COALESCE(NULLIF(QTD_REVENUE_UNITS, 0), 1) AS QTD_IMPL_REV_RATIO
-        FROM
-            (
-                SELECT
-                    ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) AS SALES_CREDIT_REP_EMAIL,
-                    ISNULL(ALIGNMENT.NAME_REP, ROSTER.NAME_REP) AS NAME_REP,
-                    OPPS.COVERAGE_TYPE,
-                    OPPS.REP_TERR_ID,
-                    OPPS.ZIP_TERR_ID,
-                    OPPS.DE_FACTO_TERR_ID,
-                    ISNULL(ALIGNMENT.REGION_NM, ROSTER.REGION) AS REGION_NM,
-                    ISNULL(ALIGNMENT.REGION_ID, ROSTER.REGION_ID) AS REGION_ID,
-                    OPPS.CLOSEDATE,
-                    ISNULL(OPPS.CLOSE_YYYYMM, ROSTER.YYYYMM) AS CLOSE_YYYYMM,
-                    ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ) AS CLOSE_YYYYQQ,
-                    OPPS.IMPLANTED_DT,
-                    OPPS.IMPLANTED_YYYYMM,
-                    OPPS.IMPLANTED_YYYYQQ,
-                    OPPS.DHC_IDN_NAME__C,
-                    OPPS.ACCOUNT_INDICATION__C,
-                    OPPS.ACT_ID,
-                    OPPS.NAME AS OPP_NAME,
-                    OPPS.OPP_ID,
-                    OPPS.OPP_OWNER_EMAIL,
-                    OPPS.PHYSICIAN,
-                    OPPS.PHYSICIAN_ID,
-                    OPPS.INDICATION_FOR_USE__C,
-                    OPPS.REASON_FOR_IMPLANT__C,
-                    STAGENAME,
-                    ISNULL(ISIMPL, 0) AS ISIMPL,
-                    ISNULL(IMPLANT_UNITS, 0) AS IMPLANT_UNITS,
-                    CASE
-                        WHEN INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' THEN ISNULL(IMPLANT_UNITS, 0)
-                        ELSE 0
-                    END AS IMPLANT_UNITS_FOR_RATIO,
-                    ISNULL(REVENUE_UNITS, 0) AS REVENUE_UNITS,
-                    CASE
-                        WHEN INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' THEN CASE
-                            WHEN DHC_IDN_NAME__C IN (
-                                'HCA Healthcare',
-                                'Department of Veterans Affairs'
-                            )
-                            AND IMPLANT_UNITS <> 0 THEN 1
-                            WHEN DHC_IDN_NAME__C IN (
-                                'HCA Healthcare',
-                                'Department of Veterans Affairs'
-                            )
-                            AND IMPLANT_UNITS = 0 THEN 0
-                            ELSE ISNULL(REVENUE_UNITS, 0)
-                        END
-                        ELSE 0
-                    END AS REV_UNITS_FOR_RATIO,
-                    ISNULL(SALES, 0) AS SALES,
-                    ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
-                    CASE
-                        WHEN ISNULL(AMOUNT, 0) <> SALES THEN 1
-                        ELSE 0
-                    END AS [REBATE?],
-                    ISNULL(ASP, 0) AS ASP,
-                    THRESHOLD,
-                    [PLAN],
-                    SUM(ISNULL(SALES_COMMISSIONABLE, 0)) OVER (
-                        PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
-                        ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ)
-                        ORDER BY
-                            ISNULL(OPPS.CLOSEDATE, ROSTER.MONTH_END_DATE),
-                            ISNULL(OPPS.NAME, 'ZZZ')
-                    ) AS QTD_SALES_COMISSIONABLE,
-                    /* make sure implants are only counted based on impl date, not closedate */
-                    SUM(ISNULL(IMPLANT_UNITS, 0)) OVER(
-                        PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
-                        ISNULL(OPPS.IMPLANTED_YYYYQQ, ROSTER.YYYYQQ)
-                        ORDER BY
-                            ISNULL(OPPS.IMPLANTED_DT, OPPS.CLOSEDATE),
-                            OPPS.NAME
-                    ) AS QTD_IMPLANT_UNITS,
-                    SUM(ISNULL(REVENUE_UNITS, 0)) OVER(
-                        PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
-                        ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ)
-                        ORDER BY
-                            OPPS.CLOSEDATE,
-                            OPPS.NAME
-                    ) AS QTD_REVENUE_UNITS
-                FROM
-                    ROSTER FULL
-                    OUTER JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
-                    AND OPPS.CLOSE_YYYYMM = ROSTER.YYYYMM
-                    LEFT JOIN QUOTA ON ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL) = QUOTA.EID
-                    AND ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ) = QUOTA.YYYYQQ
-                    LEFT JOIN ALIGNMENT ON OPPS.SALES_CREDIT_REP_EMAIL = ALIGNMENT.REP_EMAIL
-            ) AS A
-    ) AS B
+            END
+        END L2_REV,
+        QTD_IMPLANT_UNITS / COALESCE(NULLIF(QTD_REVENUE_UNITS, 0), 1) AS QTD_IMPL_REV_RATIO
+    FROM
+        OPPS2
+)
+SELECT
+    *,
+    ATM_ACCOUNT_REVENUE * 0.15 AS ATM_ACCOUNT_PO,
+    L1_REV * 0.15 AS L1_PO,
+    L2_REV * 0.2 AS L2_PO
+FROM
+    CALC

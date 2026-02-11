@@ -26,25 +26,29 @@ WITH DETAIL AS (
             END
         ) AS T_SPLIT_SALES,
         MAX(QTD_SALES_COMMISSIONABLE) AS QTD_SALES,
+        MAX(QTD_SALES_MINUS_ATM_REV) AS QTD_SALES_MINUS_ATM_REV,
+        SUM(ATM_ACCOUNT_REVENUE) AS ATM_ACCOUNT_REVENUE,
         SUM(L1_REV) AS L1_REV,
         SUM(L2_REV) AS L2_REV,
+        SUM(ATM_ACCOUNT_PO) AS ATM_ACCOUNT_PO,
         SUM(L1_PO) AS L1_PO,
         SUM(L2_PO) AS L2_PO,
         /* only calc the implant accel true up if it's the last month of the quarter and
          impl_rev_ratio is >= 0.85 */
+        /* note that ATM_ACCOUNT_REVENUE is not eligible for implant accel or program accel */
         /*The innermost NULLIF and ISNULL allows the equation to return values even for those who have had no revenue unit sales*/
         MAX(
             CASE
                 WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
-                AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_COMMISSIONABLE
+                AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_MINUS_ATM_REV
                 ELSE 0
             END
         ) * 0.05 AS IMPLANT_ACCEL_TRUE_UP,
-        SUM(L1_L2_PO) + (
+        SUM(L1_L2_ATM_PO) + (
             MAX(
                 CASE
                     WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
-                    AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_COMMISSIONABLE
+                    AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_MINUS_ATM_REV
                     ELSE 0
                 END
             ) * 0.05
@@ -71,11 +75,13 @@ WITH DETAIL AS (
                 THRESHOLD,
                 [PLAN],
                 SALES_COMMISSIONABLE,
+                ATM_ACCOUNT_REVENUE,
                 L1_REV,
                 L2_REV,
+                ATM_ACCOUNT_PO,
                 L1_PO,
                 L2_PO,
-                L1_PO + L2_PO AS L1_L2_PO,
+                L1_PO + L2_PO + ATM_ACCOUNT_PO AS L1_L2_ATM_PO,
                 IMPLANT_UNITS,
                 REVENUE_UNITS,
                 --QTD implant units
@@ -143,7 +149,18 @@ WITH DETAIL AS (
                     CLOSE_YYYYMM
                     ORDER BY
                         CLOSEDATE DESC
-                ) AS QTD_SALES_COMMISSIONABLE
+                ) AS QTD_SALES_COMMISSIONABLE,
+                MAX(QTD_SALES_COMISSIONABLE) OVER (
+                    PARTITION BY SALES_CREDIT_REP_EMAIL,
+                    CLOSE_YYYYMM
+                    ORDER BY
+                        CLOSEDATE DESC
+                ) - MAX(ATM_ACCOUNT_REVENUE) OVER (
+                    PARTITION BY SALES_CREDIT_REP_EMAIL,
+                    CLOSE_YYYYMM
+                    ORDER BY
+                        CLOSEDATE DESC
+                ) AS QTD_SALES_MINUS_ATM_REV
             FROM
                 qry_COMP_TM_DETAIL
         ) AS A
@@ -253,8 +270,11 @@ SELECT
     SALES,
     T_SPLIT_SALES,
     QTD_SALES,
+    QTD_SALES_MINUS_ATM_REV,
+    ATM_ACCOUNT_REVENUE,
     L1_REV,
     L2_REV,
+    ATM_ACCOUNT_PO,
     L1_PO,
     L2_PO,
     ISNULL(CPAS.TM_PO, 0) AS CPAS_PO,
