@@ -107,14 +107,16 @@ FROM
                     -- ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
                     SUM(
                         CASE
-                            WHEN STAGENAME = 'Revenue Recognized' THEN (ISNULL(SALES_COMMISSIONABLE, 0))
+                            WHEN STAGENAME = 'Revenue Recognized' THEN ISNULL(SALES_COMMISSIONABLE, 0)
                             ELSE 0
                         END
                     ) OVER (
-                        PARTITION BY RL.REP_EMAIL
+                        PARTITION BY RL.REP_EMAIL,
+                        LEFT(ISNULL(S.YYYYMM, CLOSE_YYYYMM), 4)
                         ORDER BY
                             CLOSEDATE,
-                            NAME
+                            NAME ROWS BETWEEN UNBOUNDED PRECEDING
+                            AND CURRENT ROW
                     ) AS YTD_SALES_COMMISSIONABLE,
                     CASE
                         WHEN STAGENAME = 'Revenue Recognized' THEN 1
@@ -141,7 +143,8 @@ FROM
                     AND SALES.CLOSEDATE <= ISNULL(DOT, '2099-12-31')
                     /* sales splits */
                     LEFT JOIN tblSalesSplits S ON S.OPP_ID = SALES.OPP_ID
-                    AND S.OPP_ID NOT IN ('006UY00000PpE5lYAF', '006UY00000U6L5LYAV')
+                    /* Baylor Scott & White 48-pack -- full amount paid to clinicals in December of 2025*/
+                    AND S.OPP_ID NOT IN ('006UY00000U6L5LYAV')
             ) AS A
             /* bring in CS targets */
             LEFT JOIN tblACCT_TGT FTP ON A.SALES_CREDIT_CS_EMAIL = FTP.EMAIL
