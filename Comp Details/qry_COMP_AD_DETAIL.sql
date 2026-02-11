@@ -121,7 +121,8 @@ OPPS AS (
         AND O.CLOSEDATE BETWEEN AA.ST_DT
         AND AA.END_DT
         LEFT JOIN tblSalesSplits S ON O.OPP_ID = S.OPP_ID
-        AND S.OPP_ID NOT IN ('006UY00000PpE5lYAF', '006UY00000U6L5LYAV')
+        /* Baylor Scott & White 48-pack -- full amount given to ASD in December 2025 (even though there was no ASD at the time)*/
+        AND S.OPP_ID NOT IN ('006UY00000U6L5LYAV')
     WHERE
         OPP_STATUS = 'CLOSED'
         AND SHIPPINGCOUNTRYCODE = 'US' -- AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
