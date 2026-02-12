@@ -70,6 +70,7 @@ OPPS AS (
         IMPLANTED_YYYYQQ,
         ACCOUNT_INDICATION__C,
         O.ACT_ID,
+        DHC_IDN_NAME__C,
         O.ACT_OWNER_EMAIL,
         OPP_OWNER_EMAIL,
         O.OPP_ID,
@@ -219,12 +220,15 @@ FROM
                     SALES_CREDIT_REP_EMAIL,
                     OPPS.CLOSEDATE,
                     CLOSE_YYYYMM,
+                    LEFT(CLOSE_YYYYMM, 4) AS CLOSE_YYYY,
                     OPPS.CLOSE_YYYYQQ,
                     OPPS.IMPLANTED_DT,
                     OPPS.IMPLANTED_YYYYMM,
                     OPPS.IMPLANTED_YYYYQQ,
+                    LEFT(OPPS.IMPLANTED_YYYYMM, 4) AS IMPLANTED_YYYY,
                     OPPS.ACCOUNT_INDICATION__C,
                     OPPS.ACT_ID,
+                    OPPS.DHC_IDN_NAME__C,
                     OPPS.NAME AS OPP_NAME,
                     OPPS.OPP_ID,
                     OPPS.PHYSICIAN,
@@ -284,6 +288,6 @@ FROM
                     LEFT JOIN QUOTA ON ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL) = QUOTA.EID
                     AND OPPS.CLOSE_YYYYQQ = QUOTA.YYYYQQ
             ) AS A
-        WHERE
-            CLOSE_YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+        -- WHERE
+        --     CLOSE_YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
     ) AS B
