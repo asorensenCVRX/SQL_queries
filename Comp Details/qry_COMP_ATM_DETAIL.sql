@@ -1,9 +1,24 @@
 -- CREATE VIEW qry_COMP_ATM_DETAIL AS 
 WITH OPPS AS (
     SELECT
-        CLOSEDATE,
-        CLOSE_YYYYMM,
-        CLOSE_YYYYQQ,
+        ISNULL(
+            EOMONTH(
+                DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+            ),
+            CLOSEDATE
+        ) AS CLOSEDATE,
+        ISNULL(S.YYYYMM, CLOSE_YYYYMM) AS CLOSE_YYYYMM,
+        CASE
+            WHEN S.YYYYMM IS NOT NULL THEN CONCAT(
+                LEFT(S.YYYYMM, 4),
+                '_Q',
+                DATEPART(
+                    QUARTER,
+                    DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
+                )
+            )
+            ELSE CLOSE_YYYYQQ
+        END AS CLOSE_YYYYQQ,
         IMPLANTED_DT,
         IMPLANTED_YYYYMM,
         IMPLANTED_YYYYQQ,
@@ -63,6 +78,7 @@ WITH OPPS AS (
         LEFT JOIN qryAlign_Act AA ON O.ACT_ID = AA.ACT_ID
         AND O.CLOSEDATE BETWEEN AA.ST_DT
         AND AA.END_DT
+        LEFT JOIN tblSalesSplits S ON S.OPP_ID = O.OPP_ID
     WHERE
         OPP_STATUS = 'CLOSED'
         AND SHIPPINGCOUNTRYCODE = 'US'
