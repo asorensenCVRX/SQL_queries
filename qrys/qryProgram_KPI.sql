@@ -264,12 +264,18 @@ B AS (
                 [IR].[REV_$ (ALL)],
                 [IR].[REV_$ (R12)],
                 [IR].[REV_$ (R6)],
+                /* SURG come from SURGEON_ID in tmpOpps */
                 isnull([ALL_TIME], 0) [SURG (ALL)],
                 isnull([SURG_R12], 0) [SURG (R12)],
                 isnull([SURG_R6], 0) [SURG (R6)],
+                /* ARC comes from PHYSICIAN_ID in tmpOpps */
                 isnull([ARC (All)], 0) [ARC (All)],
                 isnull([ARC (R12)], 0) [ARC (R12)],
-                isnull([ARC (R6)], 0) [ARC (R6)]
+                isnull([ARC (R6)], 0) [ARC (R6)],
+                /* PRESCRIBER comes from PRESCRIBER_ID in tmpOpps */
+                isnull(P.PRESCRIBER_ALL_TIME, 0) [PRESCRIBER (All)],
+                isnull(P.PRESCRIBER_R12, 0) [PRESCRIBER (R12)],
+                isnull(P.PRESCRIBER_R6, 0) [PRESCRIBER (R6)]
             FROM
                 (
                     SELECT
@@ -422,6 +428,7 @@ B AS (
                     GROUP BY
                         ACT_ID
                 ) AS I ON ir.ACT_ID = i.ACT_ID
+                /* get all implanters (de novo only) */
                 LEFT JOIN (
                     SELECT
                         S.[Account],
@@ -445,7 +452,6 @@ B AS (
                                 END AS [SURG_R6]
                             FROM
                                 (
-                                    /* Get implanters (de novo and HF only) */
                                     SELECT
                                         A.NAME [Account],
                                         ACT_ID,
@@ -455,7 +461,6 @@ B AS (
                                         MAX(IMPLANTED_DT) [LAST_IMPLANT]
                                     FROM
                                         tmpOpps O
-                                        LEFT JOIN qryCalendar C ON o.IMPLANTED_DT = c.dt
                                         LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
                                     WHERE
                                         OPP_COUNTRY = 'US'
@@ -484,49 +489,215 @@ B AS (
                         S.[Account],
                         S.ACT_ID
                 ) AS S ON IR.ACT_ID = S.ACT_ID
+                /* get all referrers (de novo only) */
                 LEFT OUTER JOIN (
-                    /* get all referrers (de novo and HF only) */
                     SELECT
-                        T.ACT_ID,
-                        ACCT,
-                        SUM(COUNTER) [ARC (ALL)],
+                        S.[Account],
+                        S.ACT_ID,
+                        SUM([COUNTER]) [ARC (ALL)],
                         SUM(ARC_R12) [ARC (R12)],
                         SUM(ARC_R6) [ARC (R6)]
                     FROM
                         (
                             SELECT
-                                ROW_NUMBER() OVER (
-                                    PARTITION BY ACT_ID,
-                                    PHYSICIAN_ID
-                                    ORDER BY
-                                        MONTH_START_DATE DESC
-                                ) ROW,
-                                *,
+                                T.*,
+                                c.r12,
+                                c.R6,
                                 CASE
-                                    WHEN R12 = 'C12' THEN 1
+                                    WHEN C.r12 = 'C12' THEN [COUNTER]
                                     ELSE 0
                                 END AS [ARC_R12],
                                 CASE
-                                    WHEN R6 = 'C6' THEN 1
+                                    WHEN C.r6 = 'C6' THEN [COUNTER]
                                     ELSE 0
                                 END AS [ARC_R6]
                             FROM
-                                tmpARC
-                            WHERE
-                                IMPLANT_UNITS <> 0
-                                AND YYYYMM < FORMAT(GETDATE(), 'yyyy_MM')
-                        ) AS T
-                    WHERE
-                        ROW = 1
-                        AND act_ID IS NOT NULL
+                                (
+                                    SELECT
+                                        A.NAME [Account],
+                                        ACT_ID,
+                                        PHYSICIAN,
+                                        PHYSICIAN_ID,
+                                        1 AS COUNTER,
+                                        MAX(IMPLANTED_DT) [LAST_IMPLANT]
+                                    FROM
+                                        tmpOpps O
+                                        LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
+                                    WHERE
+                                        OPP_COUNTRY = 'US'
+                                        AND OPP_STATUS = 'CLOSED'
+                                        AND ISIMPL = 1
+                                        AND REASON_FOR_IMPLANT__C = 'De novo'
+                                        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+                                        AND PHYSICIAN_ID IS NOT NULL
+                                        AND CLOSEDATE < (
+                                            SELECT
+                                                cast(MONTH_START_DATE AS date) AS DT
+                                            FROM
+                                                qryCalendar
+                                            WHERE
+                                                dt = cast(getdate() AS date)
+                                        )
+                                    GROUP BY
+                                        A.NAME,
+                                        ACT_ID,
+                                        PHYSICIAN,
+                                        PHYSICIAN_ID
+                                ) AS T
+                                LEFT JOIN qryCalendar C ON T.LAST_IMPLANT = c.dt
+                        ) AS S
                     GROUP BY
-                        ACT_ID,
-                        ACCT
+                        S.[Account],
+                        S.ACT_ID
                 ) A ON IR.act_ID = a.act_ID
+                /* get all prescribers (de novo only) */
+                LEFT OUTER JOIN (
+                    SELECT
+                        S.[Account],
+                        S.ACT_ID,
+                        SUM([COUNTER]) [PRESCRIBER_ALL_TIME],
+                        SUM(PRESCRIBER_R12) [PRESCRIBER_R12],
+                        SUM(PRESCRIBER_R6) [PRESCRIBER_R6]
+                    FROM
+                        (
+                            SELECT
+                                T.*,
+                                c.r12,
+                                c.R6,
+                                CASE
+                                    WHEN C.r12 = 'C12' THEN [COUNTER]
+                                    ELSE 0
+                                END AS [PRESCRIBER_R12],
+                                CASE
+                                    WHEN C.r6 = 'C6' THEN [COUNTER]
+                                    ELSE 0
+                                END AS [PRESCRIBER_R6]
+                            FROM
+                                (
+                                    SELECT
+                                        A.NAME [Account],
+                                        ACT_ID,
+                                        PRESCRIBER,
+                                        PRESCRIBER_ID,
+                                        1 AS COUNTER,
+                                        MAX(IMPLANTED_DT) [LAST_IMPLANT]
+                                    FROM
+                                        tmpOpps O
+                                        LEFT JOIN sfdcAccount A ON O.ACT_ID = A.ID
+                                    WHERE
+                                        OPP_COUNTRY = 'US'
+                                        AND OPP_STATUS = 'CLOSED'
+                                        AND ISIMPL = 1
+                                        AND REASON_FOR_IMPLANT__C = 'De novo'
+                                        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+                                        AND PRESCRIBER_ID IS NOT NULL
+                                        AND CLOSEDATE < (
+                                            SELECT
+                                                cast(MONTH_START_DATE AS date) AS DT
+                                            FROM
+                                                qryCalendar
+                                            WHERE
+                                                dt = cast(getdate() AS date)
+                                        )
+                                    GROUP BY
+                                        A.NAME,
+                                        ACT_ID,
+                                        PRESCRIBER,
+                                        PRESCRIBER_ID
+                                ) AS T
+                                LEFT JOIN qryCalendar C ON T.LAST_IMPLANT = c.dt
+                        ) AS S
+                    GROUP BY
+                        S.[Account],
+                        S.ACT_ID
+                ) AS P ON P.ACT_ID = IR.ACT_ID
         ) AS M
         LEFT JOIN qryCust C ON c.ID = M.act_id
         LEFT JOIN qryCust_DHC D ON C.CMS_ID__C = D.[Provider Number]
         LEFT JOIN qryCust_DHC E ON c.DHC_ACCOUNT_ID__C = cast(e.[Definitive ID] AS varchar)
+),
+DISTINCT_PHYS AS (
+    SELECT
+        Account,
+        ACT_ID,
+        COUNT(DOC_ID) AS DISTINCT_ARC_AND_PRESC
+    FROM
+        (
+            SELECT
+                Account,
+                ACT_ID,
+                DOC_ID,
+                MAX(IMPLANTED_DT) AS [LAST_IMPLANT]
+            FROM
+                (
+                    SELECT
+                        A.NAME [Account],
+                        O.ACT_ID,
+                        O.PRESCRIBER_ID AS DOC_ID,
+                        IMPLANTED_DT
+                    FROM
+                        tmpOpps O
+                        LEFT JOIN sfdcAccount A ON A.ID = O.ACT_ID
+                    WHERE
+                        OPP_COUNTRY = 'US'
+                        AND OPP_STATUS = 'CLOSED'
+                        AND ISIMPL = 1
+                        AND REASON_FOR_IMPLANT__C = 'De novo'
+                        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+                        AND PRESCRIBER_ID IS NOT NULL
+                        AND CLOSEDATE < (
+                            SELECT
+                                cast(MONTH_START_DATE AS date) AS DT
+                            FROM
+                                qryCalendar
+                            WHERE
+                                dt = cast(getdate() AS date)
+                        )
+                    UNION
+                    ALL
+                    SELECT
+                        A.NAME [Account],
+                        O.ACT_ID,
+                        O.PHYSICIAN_ID AS DOC_ID,
+                        IMPLANTED_DT
+                    FROM
+                        tmpOpps O
+                        LEFT JOIN sfdcAccount A ON A.ID = O.ACT_ID
+                    WHERE
+                        OPP_COUNTRY = 'US'
+                        AND OPP_STATUS = 'CLOSED'
+                        AND ISIMPL = 1
+                        AND REASON_FOR_IMPLANT__C = 'De novo'
+                        AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+                        AND PHYSICIAN_ID IS NOT NULL
+                        AND CLOSEDATE < (
+                            SELECT
+                                cast(MONTH_START_DATE AS date) AS DT
+                            FROM
+                                qryCalendar
+                            WHERE
+                                dt = cast(getdate() AS date)
+                        )
+                ) AS A
+            WHERE
+                FORMAT(IMPLANTED_DT, 'yyyy_MM') < FORMAT(GETDATE(), 'yyyy_MM')
+            GROUP BY
+                Account,
+                ACT_ID,
+                DOC_ID
+            HAVING
+                FORMAT(MAX(IMPLANTED_DT), 'yyyy_MM') IN (
+                    SELECT
+                        DISTINCT YYYYMM
+                    FROM
+                        qryCalendar
+                    WHERE
+                        R12 = 'C12'
+                )
+        ) AS B
+    GROUP BY
+        Account,
+        ACT_ID
 ),
 -- consistency metric
 CM AS (
@@ -549,7 +720,10 @@ BP AS (
         ID AS BP_ID,
         Blueprint_Type__c,
         Status__c,
-        ASD_Sign_Date__c
+        ASD_Sign_Date__c,
+        Champions__c,
+        Prescribers__c,
+        Referrers__c
     FROM
         ods.sfdcBlueprint
     WHERE
@@ -565,12 +739,12 @@ Q AS
         ISNULL(CM.CONSECUTIVE_MONTHS, 0) AS CONSISTENCY,
         ISNULL(CM.[CONSISTENCY_METRIC_MET?], 0) AS [CONSISTENCY_METRIC_MET?],
         CASE
-            WHEN [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 4 THEN 1
+            WHEN [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + [CHAMPION_METRIC_MET?] + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 5 THEN 1
             ELSE 0
         END AS [isProgram?],
         CONCAT(
-            [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + isnull([CONSISTENCY_METRIC_MET?], 0),
-            '/4'
+            [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + [CHAMPION_METRIC_MET?] + isnull([CONSISTENCY_METRIC_MET?], 0),
+            '/5'
         ) AS METRICS_MET,
         count(*) over (PARTITION by [Definitive ID]) AS [DEFINITIVE ID DUPE?],
         /* some records have an SFDC associated with a different Definitive ID than what Jordan has in his file.
@@ -615,21 +789,6 @@ Q AS
                 '/view'
             )
         END AS SFDC_LINK,
-        CASE
-            WHEN BP.Status__c = 'Active' THEN 'Yes'
-            ELSE 'No'
-        END AS [Blueprint Completed?],
-        BP.Blueprint_Type__c AS [Blueprint Type],
-        BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
-        BP.BP_ID AS BLUEPRINT_ID,
-        CASE
-            WHEN BP_ID IS NULL THEN NULL
-            ELSE CONCAT(
-                'https://cvrx.lightning.force.com/lightning/r/Blueprint__c/',
-                BP_ID,
-                '/view'
-            )
-        END AS BLUEPRINT_LINK,
         CASE
             WHEN ACT_ID IN (
                 SELECT
@@ -717,6 +876,11 @@ Q AS
                 X.[ARC (All)],
                 X.[ARC (R12)],
                 X.[ARC (R6)],
+                X.[PRESCRIBER (ALL)],
+                X.[PRESCRIBER (R12)],
+                X.[PRESCRIBER (R6)],
+                X.DISTINCT_ARC_AND_PRESC,
+                BP.Champions__c AS CHAMPIONS,
                 ISNULL(Z.[HF Diagnosis], 0) AS [HF Diagnosis],
                 ISNULL(Z.CardioMEMS, 0) AS CardioMEMS,
                 ISNULL(Z.LVAD, 0) AS LVAD,
@@ -736,13 +900,32 @@ Q AS
                     ELSE 0
                 END AS [VOLUME_METRIC_MET?],
                 CASE
-                    WHEN [ARC (R12)] >= 5 THEN 1
+                    WHEN [DISTINCT_ARC_AND_PRESC] >= 5 THEN 1
                     ELSE 0
                 END AS [REFERRER_METRIC_MET?],
                 CASE
                     WHEN [SURG (R12)] >= 2 THEN 1
                     ELSE 0
-                END AS [SURGEON_METRIC_MET?]
+                END AS [SURGEON_METRIC_MET?],
+                CASE
+                    WHEN BP.Champions__c >= 2 THEN 1
+                    ELSE 0
+                END AS [CHAMPION_METRIC_MET?],
+                CASE
+                    WHEN BP.Status__c = 'Active' THEN 'Yes'
+                    ELSE 'No'
+                END AS [Blueprint Completed?],
+                BP.Blueprint_Type__c AS [Blueprint Type],
+                BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
+                BP.BP_ID AS BLUEPRINT_ID,
+                CASE
+                    WHEN BP_ID IS NULL THEN NULL
+                    ELSE CONCAT(
+                        'https://cvrx.lightning.force.com/lightning/r/Blueprint__c/',
+                        BP_ID,
+                        '/view'
+                    )
+                END AS BLUEPRINT_LINK
             FROM
                 (
                     SELECT
@@ -792,10 +975,15 @@ Q AS
                         ISNULL(B.[SURG (R6)], 0) AS [SURG (R6)],
                         ISNULL(B.[ARC (All)], 0) AS [ARC (All)],
                         ISNULL(B.[ARC (R12)], 0) AS [ARC (R12)],
-                        ISNULL(B.[ARC (R6)], 0) AS [ARC (R6)]
+                        ISNULL(B.[ARC (R6)], 0) AS [ARC (R6)],
+                        ISNULL(B.[PRESCRIBER (All)], 0) AS [PRESCRIBER (ALL)],
+                        ISNULL(B.[PRESCRIBER (R12)], 0) AS [PRESCRIBER (R12)],
+                        ISNULL(B.[PRESCRIBER (R6)], 0) AS [PRESCRIBER (R6)],
+                        ISNULL(DP.DISTINCT_ARC_AND_PRESC, 0) AS DISTINCT_ARC_AND_PRESC
                     FROM
                         A FULL
                         JOIN b ON a.ID = b.ACT_ID
+                        LEFT JOIN DISTINCT_PHYS DP ON DP.ACT_ID = ISNULL(A.ID, B.ACT_ID)
                 ) AS X
                 OUTER APPLY(
                     SELECT
@@ -839,9 +1027,9 @@ Q AS
                         AND T.TERRITORY_ID NOT LIKE 'MDR%'
                         AND T.END_DT > GETDATE()
                 ) AS T ON ISNULL(D.DE_FACTO_TERR, X.TERR_ID) = T.TERRITORY_ID
+                LEFT JOIN BP ON X.SFDC_ID = BP.Account__c
         ) AS Y
         LEFT JOIN CM ON Y.SFDC_ID = CM.ACT_ID
-        LEFT JOIN BP ON Y.SFDC_ID = BP.Account__c
 )
 SELECT
     *
