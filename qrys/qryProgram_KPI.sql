@@ -717,15 +717,34 @@ CM AS (
 BP AS (
     SELECT
         Account__c,
-        ID AS BP_ID,
+        B.ID AS BP_ID,
         Blueprint_Type__c,
         Status__c,
         ASD_Sign_Date__c,
-        Champions__c,
         Prescribers__c,
-        Referrers__c
+        Referrers__c,
+        C.[Clinical Champion] AS CLINICAL_CHAMPIONS,
+        C.[Admin Champion] AS ADMIN_CHAMPIONS
     FROM
-        ods.sfdcBlueprint
+        ods.sfdcBlueprint B
+        LEFT JOIN (
+            SELECT
+                *
+            FROM
+                (
+                    SELECT
+                        Blueprint__c,
+                        Role__c,
+                        Champion__c
+                    FROM
+                        ods.sfdcBlueprint_Contact
+                    WHERE
+                        Champion__c = 'Yes'
+                        AND Role__c IN ('Clinical Champion', 'Admin Champion')
+                ) AS SRC PIVOT(
+                    COUNT(Champion__c) FOR Role__c IN ([Clinical Champion], [Admin Champion])
+                ) AS PVT
+        ) C ON B.ID = C.Blueprint__c
     WHERE
         Status__c = 'Active'
 ),
@@ -739,11 +758,19 @@ Q AS
         ISNULL(CM.CONSECUTIVE_MONTHS, 0) AS CONSISTENCY,
         ISNULL(CM.[CONSISTENCY_METRIC_MET?], 0) AS [CONSISTENCY_METRIC_MET?],
         CASE
-            WHEN [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + [CHAMPION_METRIC_MET?] + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 5 THEN 1
+            WHEN [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + CASE
+                WHEN [ADMIN_CHAMPION_METRIC_MET?] = 1
+                AND [CLINICAL_CHAMPION_METRIC_MET?] = 1 THEN 1
+                ELSE 0
+            END + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 5 THEN 1
             ELSE 0
         END AS [isProgram?],
         CONCAT(
-            [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + [CHAMPION_METRIC_MET?] + isnull([CONSISTENCY_METRIC_MET?], 0),
+            [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + CASE
+                WHEN [ADMIN_CHAMPION_METRIC_MET?] = 1
+                AND [CLINICAL_CHAMPION_METRIC_MET?] = 1 THEN 1
+                ELSE 0
+            END + isnull([CONSISTENCY_METRIC_MET?], 0),
             '/5'
         ) AS METRICS_MET,
         count(*) over (PARTITION by [Definitive ID]) AS [DEFINITIVE ID DUPE?],
@@ -880,7 +907,8 @@ Q AS
                 X.[PRESCRIBER (R12)],
                 X.[PRESCRIBER (R6)],
                 X.DISTINCT_ARC_AND_PRESC,
-                BP.Champions__c AS CHAMPIONS,
+                ISNULL(BP.ADMIN_CHAMPIONS, 0) AS ADMIN_CHAMPIONS,
+                ISNULL(BP.CLINICAL_CHAMPIONS, 0) AS CLINICAL_CHAMPIONS,
                 ISNULL(Z.[HF Diagnosis], 0) AS [HF Diagnosis],
                 ISNULL(Z.CardioMEMS, 0) AS CardioMEMS,
                 ISNULL(Z.LVAD, 0) AS LVAD,
@@ -908,9 +936,13 @@ Q AS
                     ELSE 0
                 END AS [SURGEON_METRIC_MET?],
                 CASE
-                    WHEN BP.Champions__c >= 2 THEN 1
+                    WHEN BP.ADMIN_CHAMPIONS >= 1 THEN 1
                     ELSE 0
-                END AS [CHAMPION_METRIC_MET?],
+                END AS [ADMIN_CHAMPION_METRIC_MET?],
+                CASE
+                    WHEN BP.CLINICAL_CHAMPIONS >= 1 THEN 1
+                    ELSE 0
+                END AS [CLINICAL_CHAMPION_METRIC_MET?],
                 CASE
                     WHEN BP.Status__c = 'Active' THEN 'Yes'
                     ELSE 'No'
