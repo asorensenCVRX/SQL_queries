@@ -48,7 +48,7 @@ WITH qOpps AS (
                     ELSE 1
                 END AS [hasRelatedProcedure?],
                 A.ACCOUNTID AS ACT_ID,
-                A.OPPORTUNITY_REGION__C,
+                A.[OPPORTUNITY_REGION__C],
                 ISNULL(A.OPPORTUNITY_SOURCE__C, 'N/A') AS OPPORTUNITY_SOURCE__C,
                 CASE
                     WHEN LEFT(A.OPPORTUNITY_REGION__C, 3) = 'EU ' THEN 'EU'
@@ -66,7 +66,15 @@ WITH qOpps AS (
                     ) THEN 'EU'
                     ELSE NULL
                 END AS OPP_COUNTRY,
-                A.OPPORTUNITY_OWNER_REGION__C,
+                REPLACE(
+                    REPLACE(
+                        A.OPPORTUNITY_OWNER_REGION__C,
+                        'The Syndicate',
+                        'South Central'
+                    ),
+                    'Northbeast',
+                    'Northeast'
+                ) AS [OPPORTUNITY_OWNER_REGION__C],
                 A.OPPORTUNITY_OWNER_AREA__C,
                 D.SHIPPINGSTATECODE,
                 D.SHIPPINGCITY,
@@ -152,12 +160,6 @@ WITH qOpps AS (
                     AND ISNULL(a.EXPECTEDREVENUE, 0) > - 10000 THEN 0
                     ELSE TOTALOPPORTUNITYQUANTITY
                 END AS REVENUE_UNITS,
-                AF.BEING_EVAL_DT,
-                Ag.BEING_EVALUATED_2_DT,
-                ISNULL(
-                    AF.BEING_EVAL_DT,
-                    Ag.BEING_EVALUATED_2_DT
-                ) IBE_ALL_DT,
                 CASE
                     WHEN (
                         CASE
@@ -200,42 +202,6 @@ WITH qOpps AS (
                     WHEN E.NAME = 'Procedure - North America' THEN 0
                     ELSE NULL
                 END AS DURATION,
-                CASE
-                    WHEN E.NAME = 'Procedure - North America'
-                    AND (
-                        ISNULL(AF.BEING_EVAL_DT, Ag.BEING_EVALUATED_2_DT)
-                    ) IS NOT NULL
-                    AND H.PROCEDURE_DATE__C IS NOT NULL
-                    AND DATEDIFF(
-                        dd,
-                        (
-                            ISNULL(AF.BEING_EVAL_DT, Ag.BEING_EVALUATED_2_DT)
-                        ),
-                        H.PROCEDURE_DATE__C
-                    ) >= 0 THEN DATEDIFF(
-                        dd,
-                        (
-                            ISNULL(AF.BEING_EVAL_DT, Ag.BEING_EVALUATED_2_DT)
-                        ),
-                        H.PROCEDURE_DATE__C
-                    )
-                    ELSE NULL
-                END AS DURATION_IBE,
-                CASE
-                    WHEN E.NAME = 'Procedure - North America'
-                    AND SURGICAL_CONSULT_DATE__C IS NOT NULL
-                    AND H.PROCEDURE_DATE__C IS NOT NULL
-                    AND DATEDIFF(
-                        dd,
-                        SURGICAL_CONSULT_DATE__C,
-                        H.PROCEDURE_DATE__C
-                    ) >= 0 THEN DATEDIFF(
-                        dd,
-                        SURGICAL_CONSULT_DATE__C,
-                        H.PROCEDURE_DATE__C
-                    )
-                    ELSE NULL
-                END AS DURATION_SC,
                 CAST(A.CREATEDDATE AS DATE) AS CREATEDDATE,
                 DATEDIFF(dd, A.CREATEDDATE, GETDATE()) AS AGE,
                 TRIM(
@@ -366,7 +332,6 @@ WITH qOpps AS (
                 A.SURGICAL_CONSULT_DATE__C,
                 Ac.SURGICAL_CONSULT_DT,
                 A.DATE_OF_INITIAL_CONSULT__C,
-                I.CREATEDDATE AS INTERESTED_DT,
                 H.PROCEDURE_DATE__C AS IMPLANTED_DT,
                 TRIM(
                     CAST(tt3.YEAR AS VARCHAR) + '_' + RIGHT(
@@ -418,46 +383,6 @@ WITH qOpps AS (
                 LEFT JOIN (
                     SELECT
                         OPPORTUNITYID,
-                        MAX(CREATEDDATE) BEING_EVAL_DT
-                    FROM
-                        qryOppStageHIST WITH (NOLOCK)
-                    WHERE
-                        STAGENAME IN ('Being Evaluated')
-                    GROUP BY
-                        OPPORTUNITYID
-                ) AF ON A.ID = AF.OPPORTUNITYID
-                LEFT JOIN (
-                    SELECT
-                        OPPORTUNITYID,
-                        MIN(CREATEDDATE) [BEING_EVALUATED_2_DT]
-                    FROM
-                        [dbo].[qryOppStageHist]
-                    WHERE
-                        [STAGENAME] IN (
-                            'Prior Auth Compl',
-                            'Prior Auth Denied',
-                            'Prior Auth in Process',
-                            'Surgery DT Pending',
-                            'Surgical Consult',
-                            'Implant Scheduled',
-                            'Implant Completed',
-                            'Procedure Recognized',
-                            'Revenue Recognized'
-                        )
-                        AND OPPORTUNITYID NOT IN (
-                            SELECT
-                                OPPORTUNITYID
-                            FROM
-                                qryOppStageHIST
-                            WHERE
-                                STAGENAME = 'Being Evaluated'
-                        )
-                    GROUP BY
-                        OPPORTUNITYID
-                ) AG ON A.ID = AG.OPPORTUNITYID
-                LEFT JOIN (
-                    SELECT
-                        OPPORTUNITYID,
                         MAX(CREATEDDATE) SURGICAL_CONSULT_DT
                     FROM
                         qryOppStageHIST WITH (NOLOCK)
@@ -480,16 +405,6 @@ WITH qOpps AS (
                     OR h.REASON__C = 'De novo - BATwire'
                 )
                 LEFT OUTER JOIN dbo.sfdcProc AS H2 ON A.RELATED_PROCEDURE__C = H2.ID
-                LEFT OUTER JOIN (
-                    SELECT
-                        OPPORTUNITYID,
-                        STAGENAME,
-                        CREATEDDATE
-                    FROM
-                        dbo.qryOppStageHist
-                    WHERE
-                        (STAGENAME = 'Being evaluated')
-                ) AS I ON A.ID = I.OPPORTUNITYID
                 LEFT OUTER JOIN dbo.sfdcContact AS J ON A.PATIENTSREFERRINGDOC__C = J.ID
                 LEFT OUTER JOIN dbo.sfdcContact AS J2 ON h2.SURGEON__C = J2.ID
                 LEFT OUTER JOIN sfdcContact AS J3 ON A.PRESCRIBER__C = J3.ID
