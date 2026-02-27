@@ -426,42 +426,99 @@ WITH qOpps AS (
         ) AS T
 ),
 VA_HCA AS (
-    /** use this to get ASP for VA and HCA accounts **/
     SELECT
-        DHC_IDN_NAME__C,
-        SUM(SALES) [SALES_r12],
-        SUM(REVENUE_UNITS) [REV_UNITS_R12],
-        SUM(SALES) / SUM(REVENUE_UNITS) [ASP_r12]
+        A.MONTH_START_DATE,
+        FORMAT(A.MONTH_START_DATE, 'yyyy_MM') AS YYYYMM,
+        A.DHC_IDN_NAME__C,
+        ISNULL(B.SALES, 0) AS SALES,
+        ISNULL(B.REVENUE_UNITS, 0) AS REVENUE_UNITS
     FROM
-        [qOpps]
-    WHERE
-        DHC_IDN_NAME__C IN (
-            'Department of Veterans Affairs',
-            'HCA Healthcare'
-        )
-        AND CLOSE_YYYYMM IN (
+        (
             SELECT
-                DISTINCT YYYYMM
+                DISTINCT CAST(MONTH_START_DATE AS DATE) AS MONTH_START_DATE,
+                O.DHC_IDN_NAME__C
             FROM
-                qryCalendar
+                qryCalendar C
+                CROSS JOIN (
+                    SELECT
+                        DISTINCT DHC_IDN_NAME__C
+                    FROM
+                        qOpps
+                    WHERE
+                        DHC_IDN_NAME__C IN (
+                            'Department of Veterans Affairs',
+                            'HCA Healthcare'
+                        )
+                ) O
             WHERE
-                R12 = 'C12'
-        )
-        AND OPP_STATUS = 'CLOSED'
-    GROUP BY
-        DHC_IDN_NAME__C
+                MONTH_START_DATE BETWEEN '2020-01-01'
+                AND GETDATE()
+        ) AS A
+        LEFT JOIN (
+            SELECT
+                DHC_IDN_NAME__C,
+                DATEFROMPARTS(YEAR(CLOSEDATE), MONTH(CLOSEDATE), 1) AS MONTH_START,
+                SUM(SALES) AS SALES,
+                SUM(REVENUE_UNITS) AS REVENUE_UNITS
+            FROM
+                qOpps
+            WHERE
+                DHC_IDN_NAME__C IN (
+                    'Department of Veterans Affairs',
+                    'HCA Healthcare'
+                )
+                AND OPP_STATUS = 'CLOSED'
+            GROUP BY
+                DHC_IDN_NAME__C,
+                DATEFROMPARTS(YEAR(CLOSEDATE), MONTH(CLOSEDATE), 1)
+        ) AS B ON A.MONTH_START_DATE = B.MONTH_START
+        AND A.DHC_IDN_NAME__C = B.DHC_IDN_NAME__C
+),
+VA_CALC AS (
+    SELECT
+        YYYYMM,
+        DHC_IDN_NAME__C,
+        SUM(SALES) OVER(
+            PARTITION BY DHC_IDN_NAME__C
+            ORDER BY
+                MONTH_START_DATE ROWS BETWEEN 11 PRECEDING
+                AND CURRENT ROW
+        ) AS SALES_r12,
+        SUM(REVENUE_UNITS) OVER(
+            PARTITION BY DHC_IDN_NAME__C
+            ORDER BY
+                MONTH_START_DATE ROWS BETWEEN 11 PRECEDING
+                AND CURRENT ROW
+        ) AS [REV_UNITS_R12],
+        SUM(SALES) OVER(
+            PARTITION BY DHC_IDN_NAME__C
+            ORDER BY
+                MONTH_START_DATE ROWS BETWEEN 11 PRECEDING
+                AND CURRENT ROW
+        ) / NULLIF(
+            SUM(REVENUE_UNITS) OVER(
+                PARTITION BY DHC_IDN_NAME__C
+                ORDER BY
+                    MONTH_START_DATE ROWS BETWEEN 11 PRECEDING
+                    AND CURRENT ROW
+            ),
+            0
+        ) [ASP_r12]
+    FROM
+        VA_HCA
 )
 SELECT
     A.*,
     CASE
-        WHEN VA_HCA.ASP_r12 IS NOT NULL
-        AND ISIMPL = 1 THEN VA_HCA.ASP_r12
-        WHEN VA_HCA.ASP_r12 IS NOT NULL
+        WHEN VA_CALC.ASP_r12 IS NOT NULL
+        AND ISIMPL = 1 THEN VA_CALC.ASP_r12
+        WHEN VA_CALC.ASP_r12 IS NOT NULL
         AND ISIMPL = 0 THEN 0
         WHEN STAGENAME = 'Revenue Recognized'
-        AND VA_HCA.ASP_r12 IS NULL THEN SALES
+        AND VA_CALC.ASP_r12 IS NULL THEN SALES
         ELSE 0
     END AS SALES_COMMISSIONABLE
 FROM
     qOpps A
-    LEFT JOIN VA_HCA ON A.DHC_IDN_NAME__C = VA_HCA.DHC_IDN_NAME__C
+    LEFT JOIN VA_CALC ON A.DHC_IDN_NAME__C = VA_CALC.DHC_IDN_NAME__C
+    AND VA_CALC.YYYYMM = A.IMPLANTED_YYYYMM
