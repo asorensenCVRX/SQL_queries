@@ -90,6 +90,7 @@ FROM
                     IMPLANTED_YYYYMM,
                     IMPLANTED_YYYYQQ,
                     ACCOUNT_INDICATION__C,
+                    DHC_IDN_NAME__C,
                     ACT_ID,
                     NAME AS OPP_NAME,
                     SALES.OPP_ID,
@@ -107,7 +108,7 @@ FROM
                     -- ISNULL(SALES_COMMISSIONABLE, 0) AS SALES_COMMISSIONABLE,
                     SUM(
                         CASE
-                            WHEN STAGENAME = 'Revenue Recognized' THEN ISNULL(SALES_COMMISSIONABLE, 0)
+                            WHEN STAGENAME = 'Revenue Recognized' THEN ISNULL(ISNULL(S.SPLIT, 1) * SALES_COMMISSIONABLE, 0)
                             ELSE 0
                         END
                     ) OVER (
