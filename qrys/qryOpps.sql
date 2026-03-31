@@ -80,7 +80,10 @@ WITH qOpps AS (
                 D.SHIPPINGCITY,
                 D.SHIPPINGCOUNTRYCODE,
                 d.SHIPPINGSTREET,
-                D.DHC_IDN_NAME__C,
+                CASE
+                    WHEN D.DHC_IDN_NAME__C = 'HCA Healthcare' THEN 'HCA Healthcare (FKA Hospital Corporation of America)'
+                    ELSE D.DHC_IDN_NAME__C
+                END AS DHC_IDN_NAME__C,
                 D.PRIMARY_GPO__C,
                 G.Rep AS SALES_CREDIT_REP,
                 G.EMAIL AS SALES_CREDIT_REP_EMAIL,
@@ -173,7 +176,7 @@ WITH qOpps AS (
                             ELSE 'OPEN'
                         END
                     ) = 'OPEN'
-                    AND E.NAME = 'Procedure - North America'
+                    AND E.NAME <> 'Financial Opportunity'
                     AND A.CREATEDDATE IS NOT NULL
                     AND DATEDIFF(dd, A.CREATEDDATE, GETDATE()) >= 0 THEN DATEDIFF(
                         dd,
@@ -192,14 +195,14 @@ WITH qOpps AS (
                             ELSE 'OPEN'
                         END
                     ) = 'CANCELLED'
-                    AND E.NAME = 'Procedure - North America'
+                    AND E.NAME <> 'Financial Opportunity'
                     AND A.CREATEDDATE IS NOT NULL
                     AND DATEDIFF(dd, A.CREATEDDATE, GETDATE()) >= 0 THEN DATEDIFF(dd, A.CREATEDDATE, a.LASTSTAGECHANGEDATE)
-                    WHEN E.NAME = 'Procedure - North America'
+                    WHEN E.NAME <> 'Financial Opportunity'
                     AND H.PROCEDURE_DATE__C IS NOT NULL
                     AND A.CREATEDDATE IS NOT NULL
                     AND DATEDIFF(dd, A.CREATEDDATE, H.PROCEDURE_DATE__C) >= 0 THEN DATEDIFF(dd, A.CREATEDDATE, H.PROCEDURE_DATE__C)
-                    WHEN E.NAME = 'Procedure - North America' THEN 0
+                    WHEN E.NAME <> 'Financial Opportunity' THEN 0
                     ELSE NULL
                 END AS DURATION,
                 CAST(A.CREATEDDATE AS DATE) AS CREATEDDATE,
@@ -447,7 +450,8 @@ VA_HCA AS (
                     WHERE
                         DHC_IDN_NAME__C IN (
                             'Department of Veterans Affairs',
-                            'HCA Healthcare'
+                            'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                            'HCA Healthcare (FKA Hospital Corporation of America)'
                         )
                 ) O
             WHERE
@@ -465,7 +469,8 @@ VA_HCA AS (
             WHERE
                 DHC_IDN_NAME__C IN (
                     'Department of Veterans Affairs',
-                    'HCA Healthcare'
+                    'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                    'HCA Healthcare (FKA Hospital Corporation of America)'
                 )
                 AND OPP_STATUS = 'CLOSED'
             GROUP BY
