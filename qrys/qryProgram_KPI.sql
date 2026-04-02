@@ -2,34 +2,28 @@
 /* ALL METRICS TRACK ONLY HEART FAILURE -- DE NOVO EXCEPT CONSISTENCY (tracks all HF implants including replacements) */
 /* CTE A and B were written by Jake in the DataSet Excel file. */
 /* CTE CM brings in the data for the consistency metric */
+/* Old IDN contract logic:
+ CASE
+ WHEN TRIM(IDN) IN(
+ 'AdventHealth',
+ 'CommonSpirit Health',
+ 'Department of Veterans Affairs',
+ 'HCA Healthcare',
+ 'Tenet Healthcare',
+ 'Trinity Health',
+ 'Universal Health Services'
+ ) THEN 'Y'
+ ELSE 'N'
+ END AS [IDN_CONTRACT]*/
 WITH A AS (
     SELECT
         M.STAGE,
-        RANK() OVER(
-            PARTITION BY REGION,
-            REP
-            ORDER BY
-                [RankScore]
-        ) [Analytics_Rank],
-        N.[LEK Priority],
         REP_RANK,
         M.NAME,
         M.CITY_STATE,
-        M.BEDS,
-        M.GPO,
         M.IDN,
-        M.IDN_CONTRACT,
-        M.TU,
         M.PATIENTS_IN_FUNNEL,
         M.IMPLANTS_COMPLETED,
-        /* removed the below lines because this data will be provided by Liam */
-        -- M.HF_CLAIMS,
-        -- M.CardioMEMS,
-        -- M.LVAD,
-        -- M.CRT_PROCEDURES,
-        /******************/
-        M.REIMBURSEMENT_QTILE,
-        M.[MEDICARE_%],
         M.REP,
         M.REP_EMAIL,
         M.REGION,
@@ -38,7 +32,6 @@ WITH A AS (
         M.PROVIDER_ID,
         M.ZIP_5,
         M.CBSA,
-        M.RANKSCORE,
         M.SRC,
         m.ID,
         ACCOUNT_TIER
@@ -79,35 +72,19 @@ WITH A AS (
                 END AS [STAGE],
                 dbo.ConvertToTitleCase(C.SHIPPINGCITY) + ', ' + c.SHIPPINGSTATECODE [CITY_STATE],
                 CAST(C.SHIPPINGPOSTALCODE AS VARCHAR) [ZIP_5],
-                ISNULL(
-                    CAST(D.[# of Staffed Beds] AS VARCHAR),
-                    'Unknown'
-                ) [BEDS],
                 CASE
                     WHEN isAIC = 1 THEN 'AIC'
                     WHEN ISACU = 1 THEN 'ACU'
                     WHEN STAGE_NEW__C = 'In-Development (N-ACU)' THEN 'N-ACU'
                     ELSE NULL
                 END [REP_RANK],
-                D.GPO,
-                D.IDN,
-                D.IDN_CONTRACT,
+                C.DHC_IDN_NAME__C AS IDN,
                 ISNULL(H.PATIENTS_IN_FUNNEL, 0) PATIENTS_IN_FUNNEL,
                 C.TOTAL_RECOGNIZED_IMPLANT__C [IMPLANTS_COMPLETED],
-                D.HF_CLAIMS,
-                D.CRT_PROCEDURES,
-                d.CardioMEMS,
-                d.LVAD,
-                --D.CRT_PROCEDURES_QTILE, 
-                d.COST_TO_CHARGE_RATIO_QTILE [REIMBURSEMENT_QTILE],
-                d.[MEDICARE_%],
-                ISNULL(d.RankScore, 4000) [RANKSCORE],
                 'SFDC' AS [SRC],
-                TU,
                 TRY_CAST(LEFT(C.Account_Tier__c, 1) AS INT) AS ACCOUNT_TIER
             FROM
                 qryCust C
-                LEFT JOIN qryCust_DHC d ON C.DHC_ACCOUNT_ID__C = CAST(d.[Definitive ID] AS VARCHAR)
                 LEFT JOIN (
                     SELECT
                         DISTINCT *
@@ -150,55 +127,29 @@ WITH A AS (
                 ) H ON c.ID = H.ACT_ID
                 /**********************/
             WHERE
-                C.SHIPPINGCOUNTRY = 'USA' --AND (ISACU = 1 OR d.HF_CLAIMS_QTILE > 2 OR d.IDN_CONTRACT = 'Y')
-                AND (
-                    ISACU = 1
-                    OR ISNULL(d.HF_CLAIMS, 0) IS NOT NULL
-                    OR d.IDN_CONTRACT = 'Y'
-                )
+                C.SHIPPINGCOUNTRY = 'USA'
             UNION
             ALL
             /* this second part of the union query is bringing in accounts from DHC */
             SELECT
                 --'DHC' AS [ACCOUNT_SRC], 
-                CAST(STR([Definitive ID]) AS VARCHAR) [Definitive ID],
+                CAST(STR(T.[Definitive ID]) AS VARCHAR) [Definitive ID],
                 CAST(t.[Provider Number] AS VARCHAR) [Provider Number],
-                --       '' AS [SFDC_ID], 
                 ISNULL(E.NAME_REP, 'Unassigned') AS [REP],
                 ISNULL(E.REP_EMAIL, 'Unassigned') AS [REP_EMAIL],
                 ISNULL(E.REGION, 'Unassigned') AS [REGION],
                 E.TERR_ID,
-                --     ISNULL(B.TERRITORY, 'Unassigned') AS [TERRITORY], 
-                -- ISNULL(ISNULL(ISNULL(ISNULL(E.OWNER_EMAIL, f.OWNER_EMAIL), g.OWNER_EMAIL), f2.OWNER_EMAIL), f3.OWNER_EMAIL) AS [REP_OWNER_EMAIL], 
-                --   [CSA ID], 
                 (t.cbsa + ' - ' + t.cbsa_name) [CBSA],
                 T.HOSPITAL_NAME,
                 NULL,
                 'Target' AS [STAGE],
-                --  '' AS [CONTRACTING__C], 
-                --'' AS [VALUE_ANALYSIS_INITIATED__C], 
-                --'' AS [STAGE_NEW__C], 
-                --0 AS [ISACU], 
-                --'FALSE' AS [isAIC], 
                 dbo.ConvertToTitleCase(T.City) + ', ' + t.State [CITY_STATE],
                 CAST(RIGHT('00000' + T.ZIPCode, 5) AS VARCHAR) ZIPCode,
-                ISNULL(CAST([# of Staffed Beds] AS VARCHAR), 'Unknown') [BEDS],
                 NULL AS [REP_RANK],
-                GPO,
                 IDN,
-                IDN_CONTRACT,
                 0 AS [PATIENTS_IN_FUNNEL],
                 0 AS [IMPLANTS_COMPLETED],
-                HF_CLAIMS,
-                CRT_PROCEDURES,
-                T.CardioMEMS,
-                T.LVAD,
-                --CRT_PROCEDURES_QTILE, 
-                T.COST_TO_CHARGE_RATIO_QTILE AS [REIMBURSEMENT_QTILE],
-                T.[MEDICARE_%],
-                ISNULL(T.RankScore, 4000) [RANKSCORE],
                 'DHC' AS [SRC],
-                TU,
                 0 AS TIER
             FROM
                 qryCust_DHC T
@@ -208,6 +159,9 @@ WITH A AS (
                     FROM
                         qryZipAlign
                 ) E ON RIGHT('00000' + T.ZIPCode, 5) = E.ZIP_CODE
+                LEFT JOIN tblAccount_Mapping A ON TRIM(
+                    CAST(T.[Definitive ID] AS VARCHAR(50))
+                ) = TRIM(A.[Definitive ID])
             WHERE
                 CAST(T.[Definitive ID] AS VARCHAR) NOT IN (
                     SELECT
@@ -216,13 +170,12 @@ WITH A AS (
                         qryCust A
                     WHERE
                         A.DHC_ACCOUNT_ID__C IS NOT NULL
-                ) --AND (t.HF_CLAIMS_QTILE > 2 OR IDN_CONTRACT = 'Y')
+                )
                 AND (
-                    ISNULL(t.HF_CLAIMS, 0) <> 0
-                    OR IDN_CONTRACT = 'Y'
+                    IDN_CONTRACT = 'Y'
+                    OR ISNULL(A.[HF Diagnosis], 0) <> 0
                 )
         ) AS M
-        LEFT JOIN dhc_LEK N ON M.PROVIDER_ID = n.[Cleaned PROV_ID]
 ),
 /* CTE B brings in implant, revenue, ARC, and surgeon data */
 B AS (
@@ -230,13 +183,7 @@ B AS (
         --    , s.*
         M.*,
         C.CMS_ID__C,
-        c.DHC_ACCOUNT_ID__C,
-        isnull(d.[# of Staffed Beds], e.[# of Staffed Beds]) [# of Staffed Beds] -- isnull(d.HF_CLAIMS, e.HF_CLAIMS) HF_CLAIMS,
-        -- isnull(d.HF_CLAIMS_QTILE, e.HF_CLAIMS_QTILE) HF_CLAIMS_QTILE,
-        -- isnull(d.CRT_PROCEDURES, e.CRT_PROCEDURES) CRT_PROCEDURES,
-        -- isnull(d.CRT_PROCEDURES_QTILE, e.CRT_PROCEDURES_QTILE) CRT_PROCEDURES_QTILE,
-        -- isnull(d.LVAD, e.LVAD) LVAD,
-        -- isnull(d.CardioMEMS, e.CardioMEMS) CardioMEMS
+        c.DHC_ACCOUNT_ID__C
     FROM
         (
             SELECT
@@ -613,8 +560,6 @@ B AS (
                 ) AS P ON P.ACT_ID = IR.ACT_ID
         ) AS M
         LEFT JOIN qryCust C ON c.ID = M.act_id
-        LEFT JOIN qryCust_DHC D ON C.CMS_ID__C = D.[Provider Number]
-        LEFT JOIN qryCust_DHC E ON c.DHC_ACCOUNT_ID__C = cast(e.[Definitive ID] AS varchar)
 ),
 DISTINCT_PHYS AS (
     SELECT
@@ -765,6 +710,10 @@ Q AS
             END + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 5 THEN 1
             ELSE 0
         END AS [isProgram?],
+        CASE
+            WHEN [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + ISNULL([CONSISTENCY_METRIC_MET?], 0) = 4 THEN 1
+            ELSE 0
+        END AS [isProgram?_EX_CHAMP],
         CONCAT(
             [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + CASE
                 WHEN [ADMIN_CHAMPION_METRIC_MET?] = 1
@@ -773,6 +722,10 @@ Q AS
             END + isnull([CONSISTENCY_METRIC_MET?], 0),
             '/5'
         ) AS METRICS_MET,
+        CONCAT(
+            [VOLUME_METRIC_MET?] + [REFERRER_METRIC_MET?] + [SURGEON_METRIC_MET?] + ISNULL([CONSISTENCY_METRIC_MET?], 0),
+            '/4'
+        ) AS METRICS_MET_EX_CHAMP,
         count(*) over (PARTITION by [Definitive ID]) AS [DEFINITIVE ID DUPE?],
         /* some records have an SFDC associated with a different Definitive ID than what Jordan has in his file.
          This "case when" statement allows you to exclude those SFDC/Definitve ID pairs that do not match Jordan's
@@ -847,16 +800,9 @@ Q AS
                 X.NAME,
                 X.CITY_STATE,
                 X.STAGE,
-                X.Analytics_Rank,
-                X.[LEK Priority],
                 X.REP_RANK,
-                X.GPO,
                 X.IDN,
-                X.IDN_CONTRACT,
-                X.TU,
                 X.PATIENTS_IN_FUNNEL,
-                X.[REIMBURSEMENT_QTILE],
-                X.[MEDICARE_%],
                 X.ACT_OWNER,
                 X.REP_EMAIL,
                 X.REP,
@@ -965,16 +911,9 @@ Q AS
                         A.CITY_STATE,
                         A.STAGE,
                         A.ACCOUNT_TIER,
-                        A.Analytics_Rank,
-                        A.[LEK Priority],
                         A.REP_RANK,
-                        A.GPO,
                         ISNULL(A.IDN, B.IDN) AS IDN,
-                        A.IDN_CONTRACT,
-                        A.TU,
                         A.PATIENTS_IN_FUNNEL,
-                        A.REIMBURSEMENT_QTILE,
-                        A.[MEDICARE_%],
                         ISNULL(A.REP, B.ACT_OWNER_NAME) AS ACT_OWNER,
                         A.REP_EMAIL,
                         A.REP,
