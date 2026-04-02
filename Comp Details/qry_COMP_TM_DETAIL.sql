@@ -49,9 +49,7 @@ ALIGNMENT AS (
 ),
 OPPS AS (
     SELECT
-        /* DISTINCT must be included so that if a CS has an account target and a physician target that overlap on an opp
-         they are not double counted. */
-        DISTINCT ISNULL(
+        ISNULL(
             EOMONTH(
                 DATEFROMPARTS(LEFT(S.YYYYMM, 4), RIGHT(S.YYYYMM, 2), 1)
             ),
@@ -98,26 +96,19 @@ OPPS AS (
         REASON_FOR_IMPLANT__C,
         STAGENAME,
         ISIMPL,
-        /* ENSURE COMP IS ONLY CALC'D FOR 'Revenue Recognized'!!! */
         CASE
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NOT NULL THEN IMPLANT_UNITS * S.SPLIT
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NULL THEN IMPLANT_UNITS
+            WHEN S.SPLIT IS NOT NULL THEN IMPLANT_UNITS * S.SPLIT
+            WHEN S.SPLIT IS NULL THEN IMPLANT_UNITS
             ELSE 0
         END AS IMPLANT_UNITS,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NOT NULL THEN REVENUE_UNITS * S.SPLIT
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NULL THEN REVENUE_UNITS
+            WHEN S.SPLIT IS NOT NULL THEN REVENUE_UNITS * S.SPLIT
+            WHEN S.SPLIT IS NULL THEN REVENUE_UNITS
             ELSE 0
         END AS REVENUE_UNITS,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NOT NULL THEN SALES * S.SPLIT
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NULL THEN SALES
+            WHEN S.SPLIT IS NOT NULL THEN SALES * S.SPLIT
+            WHEN S.SPLIT IS NULL THEN SALES
             ELSE 0
         END AS SALES,
         CASE
@@ -125,17 +116,13 @@ OPPS AS (
             ELSE SALES_COMMISSIONABLE
         END AS SALES_COMMISSIONABLE,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NOT NULL THEN AMOUNT * S.SPLIT
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NULL THEN AMOUNT
+            WHEN S.SPLIT IS NOT NULL THEN AMOUNT * S.SPLIT
+            WHEN S.SPLIT IS NULL THEN AMOUNT
             ELSE 0
         END AS AMOUNT,
         CASE
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NOT NULL THEN O.ASP * S.SPLIT
-            WHEN STAGENAME = 'Revenue Recognized'
-            AND S.SPLIT IS NULL THEN O.ASP
+            WHEN S.SPLIT IS NOT NULL THEN O.ASP * S.SPLIT
+            WHEN S.SPLIT IS NULL THEN O.ASP
             ELSE 0
         END AS ASP
         /*****************************************************/
@@ -157,11 +144,10 @@ OPPS AS (
             'Hypertension'
         )
         AND (
-            CLOSE_YYYY = 2026
+            ISNULL(LEFT(S.YYYYMM, 4), CLOSE_YYYY) = 2026
             OR IMPLANTED_YYYY = 2026
-        ) -- AND REASON_FOR_IMPLANT__C IN ('De novo', 'Replacement')
-        /* Must keep both 'Revenue Recognized' and 'Implant Completed' to calc CS deductions */
-        AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
+        )
+        AND STAGENAME = 'Revenue Recognized'
         /* Bring in t-splits */
     UNION
     ALL
