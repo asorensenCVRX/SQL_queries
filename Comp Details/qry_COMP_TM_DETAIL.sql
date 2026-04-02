@@ -21,8 +21,7 @@ WITH ROSTER AS (
         ) C
     WHERE
         (
-            ROLE = 'REP'
-            -- OR REP_EMAIL IN (
+            ROLE = 'REP' -- OR REP_EMAIL IN (
             --     'ldasilvacampos@cvrx.com',
             --     'bkelly@cvrx.com',
             --     'bsepulvado@cvrx.com',
@@ -256,12 +255,16 @@ OPPS2 AS (
             WHEN OPPS.INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction' THEN CASE
                 WHEN OPPS.DHC_IDN_NAME__C IN (
                     'HCA Healthcare',
-                    'Department of Veterans Affairs'
+                    'Department of Veterans Affairs',
+                    'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                    'HCA Healthcare (FKA Hospital Corporation of America)'
                 )
                 AND OPPS.IMPLANT_UNITS <> 0 THEN 1
                 WHEN OPPS.DHC_IDN_NAME__C IN (
                     'HCA Healthcare',
-                    'Department of Veterans Affairs'
+                    'Department of Veterans Affairs',
+                    'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                    'HCA Healthcare (FKA Hospital Corporation of America)'
                 )
                 AND OPPS.IMPLANT_UNITS = 0 THEN 0
                 ELSE ISNULL(OPPS.REVENUE_UNITS, 0)
