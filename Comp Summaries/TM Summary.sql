@@ -39,7 +39,10 @@ WITH DETAIL AS (
         /*The innermost NULLIF and ISNULL allows the equation to return values even for those who have had no revenue unit sales*/
         MAX(
             CASE
-                WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
+                WHEN ROUND(
+                    QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1),
+                    2
+                ) >= 0.85
                 AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_MINUS_ATM_REV
                 ELSE 0
             END
@@ -47,7 +50,10 @@ WITH DETAIL AS (
         SUM(L1_L2_ATM_PO) + (
             MAX(
                 CASE
-                    WHEN QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1) >= 0.85
+                    WHEN ROUND(
+                        QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1),
+                        2
+                    ) >= 0.85
                     AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_MINUS_ATM_REV
                     ELSE 0
                 END
@@ -59,8 +65,14 @@ WITH DETAIL AS (
                 ELSE 0
             END
         ) AS IMPLANT_UNITS,
-        MAX(QTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(QTD_REV_UNITS), 0), 1) AS QTD_IMPL_REV_RATIO,
-        MAX(YTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(YTD_REV_UNITS), 0), 1) AS YTD_IMPL_REV_RATIO,
+        ROUND(
+            MAX(QTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(QTD_REV_UNITS), 0), 1),
+            2
+        ) AS QTD_IMPL_REV_RATIO,
+        ROUND(
+            MAX(YTD_IMPLANT_UNITS) / ISNULL(NULLIF(MAX(YTD_REV_UNITS), 0), 1),
+            2
+        ) AS YTD_IMPL_REV_RATIO,
         SUM(REVENUE_UNITS) AS REVENUE_UNITS
     FROM
         (
@@ -101,7 +113,9 @@ WITH DETAIL AS (
                     CASE
                         WHEN DHC_IDN_NAME__C IN (
                             'HCA Healthcare',
-                            'Department of Veterans Affairs'
+                            'Department of Veterans Affairs',
+                            'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                            'HCA Healthcare (FKA Hospital Corporation of America)'
                         )
                         AND IMPLANTED_YYYYQQ = @YYYYQQ
                         AND IMPLANTED_YYYYMM <= @YYYYMM THEN REV_UNITS_FOR_RATIO
@@ -110,7 +124,9 @@ WITH DETAIL AS (
                         AND (
                             DHC_IDN_NAME__C NOT IN (
                                 'HCA Healthcare',
-                                'Department of Veterans Affairs'
+                                'Department of Veterans Affairs',
+                                'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                                'HCA Healthcare (FKA Hospital Corporation of America)'
                             )
                             OR DHC_IDN_NAME__C IS NULL
                         ) THEN REV_UNITS_FOR_RATIO
@@ -129,7 +145,9 @@ WITH DETAIL AS (
                     CASE
                         WHEN DHC_IDN_NAME__C IN (
                             'HCA Healthcare',
-                            'Department of Veterans Affairs'
+                            'Department of Veterans Affairs',
+                            'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                            'HCA Healthcare (FKA Hospital Corporation of America)'
                         )
                         AND YEAR(IMPLANTED_DT) = 2026
                         AND IMPLANTED_YYYYMM <= @YYYYMM THEN REV_UNITS_FOR_RATIO
@@ -138,7 +156,9 @@ WITH DETAIL AS (
                         AND (
                             DHC_IDN_NAME__C NOT IN (
                                 'HCA Healthcare',
-                                'Department of Veterans Affairs'
+                                'Department of Veterans Affairs',
+                                'Department of Veterans Affairs (AKA Veterans Health Administration)',
+                                'HCA Healthcare (FKA Hospital Corporation of America)'
                             )
                             OR DHC_IDN_NAME__C IS NULL
                         ) THEN REV_UNITS_FOR_RATIO
@@ -199,22 +219,13 @@ PRGRM_ACCEL AS (
                 OPP_ID,
                 SALES_CREDIT_REP_EMAIL,
                 SALES_COMMISSIONABLE,
-                SALES_COMMISSIONABLE * 0.05 AS PROGRAM_ACCEL_PO
+                SALES_COMMISSIONABLE - ATM_ACCOUNT_REVENUE AS SALES_MINUS_ATM_SALES,
+                (SALES_COMMISSIONABLE - ATM_ACCOUNT_REVENUE) * 0.05 AS PROGRAM_ACCEL_PO
             FROM
                 qry_COMP_TM_DETAIL T
-            WHERE
-                ACT_ID IN (
-                    SELECT
-                        SFDC_ID
-                    FROM
-                        tmpProgram_KPI
-                    WHERE
-                        [EXCLUDE?] = 'NO'
-                        AND [IMPLANTS (ALL)] >= 15
-                        AND CONSISTENCY >= 6
-                        AND [ARC (R12)] >= 5
-                        AND [SURG (R12)] >= 2
-                )
+                INNER JOIN tmpProgram_KPI P ON T.ACT_ID = P.SFDC_ID
+                AND P.[isProgram?_EX_CHAMP] = 1
+                AND LEFT(CLOSE_YYYYMM, 4) = 2026
                 AND STAGENAME = 'Revenue Recognized'
         ) AS P
     GROUP BY
