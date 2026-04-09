@@ -1,12 +1,127 @@
-DECLARE @YYYYMM AS VARCHAR(7) = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM');
+DECLARE @AsOfDate date = DATEADD(MONTH, -1, GETDATE());
 
-DECLARE @YYYYQQ AS VARCHAR(7) = CONCAT(
-    FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy'),
+DECLARE @YYYYMM varchar(7) = FORMAT(@AsOfDate, 'yyyy_MM');
+
+DECLARE @YYYYQQ varchar(7) = CONCAT(
+    FORMAT(@AsOfDate, 'yyyy'),
     '_Q',
-    DATEPART(QUARTER, DATEADD(MONTH, -1, GETDATE()))
+    DATEPART(QUARTER, @AsOfDate)
 );
 
-WITH DETAIL AS (
+DECLARE @Year int = YEAR(@AsOfDate);
+
+WITH special_idn AS (
+    SELECT
+        IDN_NAME
+    FROM
+        (
+            VALUES
+                ('HCA Healthcare'),
+                ('Department of Veterans Affairs'),
+                (
+                    'Department of Veterans Affairs (AKA Veterans Health Administration)'
+                ),
+                (
+                    'HCA Healthcare (FKA Hospital Corporation of America)'
+                )
+        ) v(IDN_NAME)
+),
+base AS (
+    SELECT
+        T.SALES_CREDIT_REP_EMAIL AS EID,
+        T.NAME_REP,
+        T.COVERAGE_TYPE,
+        T.REGION_NM,
+        T.CLOSE_YYYYMM AS YYYYMM,
+        T.CLOSE_YYYYQQ AS YYYYQQ,
+        T.IMPLANTED_YYYYMM,
+        T.IMPLANTED_YYYYQQ,
+        T.THRESHOLD,
+        T.[PLAN],
+        T.SALES_COMMISSIONABLE,
+        T.ATM_ACCOUNT_REVENUE,
+        T.L1_REV,
+        T.L2_REV,
+        T.ATM_ACCOUNT_PO,
+        T.L1_PO,
+        T.L2_PO,
+        T.L1_PO + T.L2_PO + T.ATM_ACCOUNT_PO AS L1_L2_ATM_PO,
+        T.IMPLANT_UNITS,
+        T.REVENUE_UNITS,
+        T.IMPLANT_UNITS_FOR_RATIO,
+        T.REV_UNITS_FOR_RATIO,
+        T.IMPLANTED_DT,
+        T.CLOSEDATE,
+        T.DHC_IDN_NAME__C,
+        CASE
+            WHEN S.IDN_NAME IS NOT NULL THEN 1
+            ELSE 0
+        END AS IS_SPECIAL_IDN
+    FROM
+        qry_COMP_TM_DETAIL T
+        LEFT JOIN special_idn S ON S.IDN_NAME = T.DHC_IDN_NAME__C
+),
+detail_src AS (
+    SELECT
+        B.*,
+        SUM(
+            CASE
+                WHEN B.IMPLANTED_YYYYQQ = @YYYYQQ
+                AND B.IMPLANTED_YYYYMM <= @YYYYMM THEN B.IMPLANT_UNITS_FOR_RATIO
+                ELSE 0
+            END
+        ) OVER (PARTITION BY B.EID) AS QTD_IMPLANT_UNITS,
+        -- QTD rev units
+        --HCA/VA rev units do not count towards the ratio on their own (this is unfair to the rep
+        --because the sold units might be implanted in a different territory). Instead, each implant 
+        --adds 1 implant unit and 1 revenue unit
+        SUM(
+            CASE
+                WHEN B.IS_SPECIAL_IDN = 1
+                AND B.IMPLANTED_YYYYQQ = @YYYYQQ
+                AND B.IMPLANTED_YYYYMM <= @YYYYMM THEN B.REV_UNITS_FOR_RATIO
+                WHEN B.IS_SPECIAL_IDN = 0
+                AND B.YYYYQQ = @YYYYQQ
+                AND B.YYYYMM <= @YYYYMM THEN B.REV_UNITS_FOR_RATIO
+                ELSE 0
+            END
+        ) OVER (PARTITION BY B.EID) AS QTD_REV_UNITS,
+        SUM(
+            CASE
+                WHEN YEAR(B.IMPLANTED_DT) = @Year
+                AND B.IMPLANTED_YYYYMM <= @YYYYMM THEN B.IMPLANT_UNITS_FOR_RATIO
+                ELSE 0
+            END
+        ) OVER (PARTITION BY B.EID) AS YTD_IMPLANT_UNITS,
+        SUM(
+            CASE
+                WHEN B.IS_SPECIAL_IDN = 1
+                AND YEAR(B.IMPLANTED_DT) = @Year
+                AND B.IMPLANTED_YYYYMM <= @YYYYMM THEN B.REV_UNITS_FOR_RATIO
+                WHEN B.IS_SPECIAL_IDN = 0
+                AND YEAR(B.CLOSEDATE) = @Year
+                AND B.YYYYMM <= @YYYYMM THEN B.REV_UNITS_FOR_RATIO
+                ELSE 0
+            END
+        ) OVER (PARTITION BY B.EID) AS YTD_REV_UNITS,
+        SUM(
+            CASE
+                WHEN B.YYYYQQ = @YYYYQQ
+                AND B.YYYYMM <= @YYYYMM THEN B.SALES_COMMISSIONABLE
+                ELSE 0
+            END
+        ) OVER (PARTITION BY B.EID) AS QTD_SALES_COMMISSIONABLE,
+        SUM(
+            CASE
+                WHEN B.YYYYQQ = @YYYYQQ
+                AND B.YYYYMM <= @YYYYMM THEN B.SALES_COMMISSIONABLE - B.ATM_ACCOUNT_REVENUE
+                ELSE 0
+            END
+        ) OVER (PARTITION BY B.EID) AS QTD_SALES_MINUS_ATM_REV
+    FROM
+        base B
+),
+detail AS (
     SELECT
         EID,
         NAME_REP,
@@ -18,11 +133,13 @@ WITH DETAIL AS (
         SUM(
             CASE
                 WHEN COVERAGE_TYPE <> 'T-SPLIT' THEN SALES_COMMISSIONABLE
+                ELSE 0
             END
         ) AS SALES,
         SUM(
             CASE
                 WHEN COVERAGE_TYPE = 'T-SPLIT' THEN SALES_COMMISSIONABLE
+                ELSE 0
             END
         ) AS T_SPLIT_SALES,
         MAX(QTD_SALES_COMMISSIONABLE) AS QTD_SALES,
@@ -43,22 +160,20 @@ WITH DETAIL AS (
                     QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1),
                     2
                 ) >= 0.85
-                AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_MINUS_ATM_REV
+                AND RIGHT(YYYYMM, 2) IN ('03', '06', '09', '12') THEN QTD_SALES_MINUS_ATM_REV
                 ELSE 0
             END
         ) * 0.05 AS IMPLANT_ACCEL_TRUE_UP,
-        SUM(L1_L2_ATM_PO) + (
-            MAX(
-                CASE
-                    WHEN ROUND(
-                        QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1),
-                        2
-                    ) >= 0.85
-                    AND YYYYMM IN ('2026_03', '2026_06', '2026_09', '2026_12') THEN QTD_SALES_MINUS_ATM_REV
-                    ELSE 0
-                END
-            ) * 0.05
-        ) AS TTL_PO,
+        SUM(L1_L2_ATM_PO) + MAX(
+            CASE
+                WHEN ROUND(
+                    QTD_IMPLANT_UNITS / ISNULL(NULLIF(QTD_REV_UNITS, 0), 1),
+                    2
+                ) >= 0.85
+                AND RIGHT(YYYYMM, 2) IN ('03', '06', '09', '12') THEN QTD_SALES_MINUS_ATM_REV
+                ELSE 0
+            END
+        ) * 0.05 AS TTL_PO,
         SUM(
             CASE
                 WHEN IMPLANTED_YYYYMM = @YYYYMM THEN IMPLANT_UNITS
@@ -75,115 +190,7 @@ WITH DETAIL AS (
         ) AS YTD_IMPL_REV_RATIO,
         SUM(REVENUE_UNITS) AS REVENUE_UNITS
     FROM
-        (
-            SELECT
-                SALES_CREDIT_REP_EMAIL AS EID,
-                NAME_REP,
-                COVERAGE_TYPE,
-                REGION_NM,
-                CLOSE_YYYYMM AS YYYYMM,
-                CLOSE_YYYYQQ AS YYYYQQ,
-                IMPLANTED_YYYYMM,
-                THRESHOLD,
-                [PLAN],
-                SALES_COMMISSIONABLE,
-                ATM_ACCOUNT_REVENUE,
-                L1_REV,
-                L2_REV,
-                ATM_ACCOUNT_PO,
-                L1_PO,
-                L2_PO,
-                L1_PO + L2_PO + ATM_ACCOUNT_PO AS L1_L2_ATM_PO,
-                IMPLANT_UNITS,
-                REVENUE_UNITS,
-                --QTD implant units
-                --always count implant units if they occurred within last month's quarter
-                SUM(
-                    CASE
-                        WHEN IMPLANTED_YYYYQQ = @YYYYQQ
-                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN IMPLANT_UNITS_FOR_RATIO
-                        ELSE 0
-                    END
-                ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS QTD_IMPLANT_UNITS,
-                -- QTD rev units
-                --HCA/VA rev units do not count towards the ratio on their own (this is unfair to the rep
-                --because the sold units might be implanted in a different territory). Instead, each implant 
-                --adds 1 implant unit and 1 revenue unit
-                SUM(
-                    CASE
-                        WHEN DHC_IDN_NAME__C IN (
-                            'HCA Healthcare',
-                            'Department of Veterans Affairs',
-                            'Department of Veterans Affairs (AKA Veterans Health Administration)',
-                            'HCA Healthcare (FKA Hospital Corporation of America)'
-                        )
-                        AND IMPLANTED_YYYYQQ = @YYYYQQ
-                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN REV_UNITS_FOR_RATIO
-                        WHEN CLOSE_YYYYQQ = @YYYYQQ
-                        AND CLOSE_YYYYMM <= @YYYYMM
-                        AND (
-                            DHC_IDN_NAME__C NOT IN (
-                                'HCA Healthcare',
-                                'Department of Veterans Affairs',
-                                'Department of Veterans Affairs (AKA Veterans Health Administration)',
-                                'HCA Healthcare (FKA Hospital Corporation of America)'
-                            )
-                            OR DHC_IDN_NAME__C IS NULL
-                        ) THEN REV_UNITS_FOR_RATIO
-                    END
-                ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS QTD_REV_UNITS,
-                -- YTD implant units
-                SUM(
-                    CASE
-                        WHEN YEAR(IMPLANTED_DT) = 2026
-                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN IMPLANT_UNITS_FOR_RATIO
-                        ELSE 0
-                    END
-                ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS YTD_IMPLANT_UNITS,
-                -- YTD rev units
-                SUM(
-                    CASE
-                        WHEN DHC_IDN_NAME__C IN (
-                            'HCA Healthcare',
-                            'Department of Veterans Affairs',
-                            'Department of Veterans Affairs (AKA Veterans Health Administration)',
-                            'HCA Healthcare (FKA Hospital Corporation of America)'
-                        )
-                        AND YEAR(IMPLANTED_DT) = 2026
-                        AND IMPLANTED_YYYYMM <= @YYYYMM THEN REV_UNITS_FOR_RATIO
-                        WHEN YEAR(CLOSEDATE) = 2026
-                        AND CLOSE_YYYYMM <= @YYYYMM
-                        AND (
-                            DHC_IDN_NAME__C NOT IN (
-                                'HCA Healthcare',
-                                'Department of Veterans Affairs',
-                                'Department of Veterans Affairs (AKA Veterans Health Administration)',
-                                'HCA Healthcare (FKA Hospital Corporation of America)'
-                            )
-                            OR DHC_IDN_NAME__C IS NULL
-                        ) THEN REV_UNITS_FOR_RATIO
-                    END
-                ) OVER (PARTITION BY SALES_CREDIT_REP_EMAIL) AS YTD_REV_UNITS,
-                MAX(QTD_SALES_COMISSIONABLE) OVER (
-                    PARTITION BY SALES_CREDIT_REP_EMAIL,
-                    CLOSE_YYYYMM
-                    ORDER BY
-                        CLOSEDATE DESC
-                ) AS QTD_SALES_COMMISSIONABLE,
-                MAX(QTD_SALES_COMISSIONABLE) OVER (
-                    PARTITION BY SALES_CREDIT_REP_EMAIL,
-                    CLOSE_YYYYMM
-                    ORDER BY
-                        CLOSEDATE DESC
-                ) - MAX(ATM_ACCOUNT_REVENUE) OVER (
-                    PARTITION BY SALES_CREDIT_REP_EMAIL,
-                    CLOSE_YYYYMM
-                    ORDER BY
-                        CLOSEDATE DESC
-                ) AS QTD_SALES_MINUS_ATM_REV
-            FROM
-                qry_COMP_TM_DETAIL
-        ) AS A
+        detail_src
     GROUP BY
         EID,
         NAME_REP,
@@ -193,46 +200,45 @@ WITH DETAIL AS (
         THRESHOLD,
         [PLAN]
 ),
-PRGRM_ACCEL AS (
+program_accel AS (
     SELECT
-        SALES_CREDIT_REP_EMAIL,
-        JOIN_KEY,
-        SUM(PROGRAM_ACCEL_PO) AS PROGRAM_ACCEL_PO
+        T.SALES_CREDIT_REP_EMAIL,
+        CONCAT(
+            LEFT(T.CLOSE_YYYYQQ, 4),
+            '_',
+            CASE
+                RIGHT(T.CLOSE_YYYYQQ, 1)
+                WHEN '1' THEN '03'
+                WHEN '2' THEN '06'
+                WHEN '3' THEN '09'
+                WHEN '4' THEN '12'
+            END
+        ) AS JOIN_KEY,
+        SUM(
+            (T.SALES_COMMISSIONABLE - T.ATM_ACCOUNT_REVENUE) * 0.05
+        ) AS PROGRAM_ACCEL_PO
     FROM
-        (
-            SELECT
-                CLOSEDATE,
-                CLOSE_YYYYMM,
-                CLOSE_YYYYQQ,
-                CASE
-                    WHEN CLOSE_YYYYQQ = '2026_Q1' THEN '2026_03'
-                    WHEN CLOSE_YYYYQQ = '2026_Q2' THEN '2026_06'
-                    WHEN CLOSE_YYYYQQ = '2026_Q3' THEN '2026_09'
-                    WHEN CLOSE_YYYYQQ = '2026_Q4' THEN '2026_12'
-                END AS JOIN_KEY,
-                IMPLANTED_DT,
-                IMPLANTED_YYYYMM,
-                ACCOUNT_INDICATION__C,
-                ACT_ID,
-                DHC_IDN_NAME__C,
-                OPP_NAME,
-                OPP_ID,
-                SALES_CREDIT_REP_EMAIL,
-                SALES_COMMISSIONABLE,
-                SALES_COMMISSIONABLE - ATM_ACCOUNT_REVENUE AS SALES_MINUS_ATM_SALES,
-                (SALES_COMMISSIONABLE - ATM_ACCOUNT_REVENUE) * 0.05 AS PROGRAM_ACCEL_PO
-            FROM
-                qry_COMP_TM_DETAIL T
-                INNER JOIN tmpProgram_KPI P ON T.ACT_ID = P.SFDC_ID
-                AND P.[isProgram?_EX_CHAMP] = 1
-                AND LEFT(CLOSE_YYYYMM, 4) = 2026
-                AND STAGENAME = 'Revenue Recognized'
-        ) AS P
+        qry_COMP_TM_DETAIL T
+        INNER JOIN tmpProgram_KPI P ON P.SFDC_ID = T.ACT_ID
+        AND P.[isProgram?_EX_CHAMP] = 1
+    WHERE
+        LEFT(T.CLOSE_YYYYMM, 4) = CAST(@Year AS varchar(4))
+        AND T.STAGENAME = 'Revenue Recognized'
     GROUP BY
-        SALES_CREDIT_REP_EMAIL,
-        JOIN_KEY
+        T.SALES_CREDIT_REP_EMAIL,
+        CONCAT(
+            LEFT(T.CLOSE_YYYYQQ, 4),
+            '_',
+            CASE
+                RIGHT(T.CLOSE_YYYYQQ, 1)
+                WHEN '1' THEN '03'
+                WHEN '2' THEN '06'
+                WHEN '3' THEN '09'
+                WHEN '4' THEN '12'
+            END
+        )
 ),
-CPAS AS (
+cpas AS (
     SELECT
         ACCOUNT_OWNER_EMAIL,
         CPAS_SUBMIT_YYYYMM,
@@ -241,14 +247,14 @@ CPAS AS (
         (
             SELECT
                 ISNULL(AA.OWNER_EMAIL, U.EMAIL) AS ACCOUNT_OWNER_EMAIL,
-                CPAS_SUBMIT_YYYYMM,
+                C.CPAS_SUBMIT_YYYYMM,
                 CASE
-                    WHEN ROW_NUMBER() OVER(
-                        PARTITION BY PATIENT__C
+                    WHEN ROW_NUMBER() OVER (
+                        PARTITION BY C.PATIENT__C
                         ORDER BY
-                            CPAS_PA_SUB_DT
+                            C.CPAS_PA_SUB_DT
                     ) = 1
-                    AND CPAS_SUBMIT_YYYYMM >= '2026_01' THEN 250
+                    AND C.CPAS_SUBMIT_YYYYMM >= CONCAT(@Year, '_01') THEN 250
                     ELSE 0
                 END AS TM_PO
             FROM
@@ -257,25 +263,69 @@ CPAS AS (
                 LEFT JOIN qryAlign_Act AA ON AA.ACT_ID = C.ACT_ID
                 AND C.CPAS_PA_SUB_DT BETWEEN AA.ST_DT
                 AND AA.END_DT
-                LEFT JOIN sfdcUser U ON A.OWNERID = U.ID
+                LEFT JOIN sfdcUser U ON U.ID = A.OWNERID
             WHERE
-                [isExcl?] = 0
-                AND CPAS_PA_SUB_DT IS NOT NULL
-        ) AS A
+                C.[isExcl?] = 0
+                AND C.CPAS_PA_SUB_DT IS NOT NULL
+        ) X
     WHERE
-        CPAS_SUBMIT_YYYYMM >= '2026_01'
+        CPAS_SUBMIT_YYYYMM >= CONCAT(@Year, '_01')
     GROUP BY
         ACCOUNT_OWNER_EMAIL,
         CPAS_SUBMIT_YYYYMM
+),
+final_data AS (
+    SELECT
+        D.EID,
+        D.NAME_REP,
+        R.DOH,
+        R.DOT,
+        D.REGION_NM,
+        D.YYYYMM,
+        D.YYYYQQ,
+        D.THRESHOLD,
+        D.[PLAN],
+        D.SALES,
+        D.T_SPLIT_SALES,
+        D.QTD_SALES,
+        D.QTD_SALES_MINUS_ATM_REV,
+        D.ATM_ACCOUNT_REVENUE,
+        D.L1_REV,
+        D.L2_REV,
+        D.ATM_ACCOUNT_PO,
+        D.L1_PO,
+        D.L2_PO,
+        ISNULL(C.TM_PO, 0) AS CPAS_PO,
+        D.IMPLANT_ACCEL_TRUE_UP,
+        ISNULL(P.PROGRAM_ACCEL_PO, 0) AS PROGRAM_ACCEL_PO,
+        D.TTL_PO AS BASE_TTL_PO,
+        D.IMPLANT_UNITS,
+        D.REVENUE_UNITS,
+        D.QTD_IMPL_REV_RATIO,
+        D.YTD_IMPL_REV_RATIO,
+        ISNULL(G.PO_AMT, 0) AS GUARANTEE_AMT
+    FROM
+        detail D
+        LEFT JOIN qryGuarantee G ON G.EMP_EMAIL = D.EID
+        AND G.YYYYMM = D.YYYYMM
+        LEFT JOIN qryRoster R ON R.REP_EMAIL = D.EID
+        AND R.[isLATEST?] = 1
+        AND R.ROLE = 'REP'
+        LEFT JOIN program_accel P ON P.SALES_CREDIT_REP_EMAIL = D.EID
+        AND P.JOIN_KEY = D.YYYYMM
+        LEFT JOIN cpas C ON C.ACCOUNT_OWNER_EMAIL = D.EID
+        AND C.CPAS_SUBMIT_YYYYMM = D.YYYYMM
+    WHERE
+        D.YYYYMM = @YYYYMM
 )
 SELECT
     EID,
-    DETAIL.NAME_REP,
-    R.DOH,
-    R.DOT,
-    DETAIL.REGION_NM,
-    DETAIL.YYYYMM,
-    DETAIL.YYYYQQ,
+    NAME_REP,
+    DOH,
+    DOT,
+    REGION_NM,
+    YYYYMM,
+    YYYYQQ,
     THRESHOLD,
     [PLAN],
     SALES,
@@ -288,42 +338,25 @@ SELECT
     ATM_ACCOUNT_PO,
     L1_PO,
     L2_PO,
-    ISNULL(CPAS.TM_PO, 0) AS CPAS_PO,
+    CPAS_PO,
     IMPLANT_ACCEL_TRUE_UP,
-    ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) AS PROGRAM_ACCEL_PO,
-    TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) + ISNULL(CPAS.TM_PO, 0) AS TTL_PO,
+    PROGRAM_ACCEL_PO,
+    BASE_TTL_PO + PROGRAM_ACCEL_PO + CPAS_PO AS TTL_PO,
     IMPLANT_UNITS,
     REVENUE_UNITS,
     QTD_IMPL_REV_RATIO,
     YTD_IMPL_REV_RATIO,
-    ISNULL(G.PO_AMT, 0) AS GAURANTEE_AMT,
+    GUARANTEE_AMT,
     CASE
-        WHEN ISNULL(G.PO_AMT, 0) > (
-            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
-        ) + ISNULL(CPAS.TM_PO, 0) THEN G.PO_AMT - (
-            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) + ISNULL(CPAS.TM_PO, 0)
-        )
+        WHEN GUARANTEE_AMT > BASE_TTL_PO + PROGRAM_ACCEL_PO + CPAS_PO THEN GUARANTEE_AMT - (BASE_TTL_PO + PROGRAM_ACCEL_PO + CPAS_PO)
         ELSE 0
-    END AS GAURANTEE_ADJ,
+    END AS GUARANTEE_ADJ,
     CASE
-        WHEN ISNULL(G.PO_AMT, 0) > (
-            TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0)
-        ) + ISNULL(CPAS.TM_PO, 0) THEN G.PO_AMT
-        ELSE TTL_PO + ISNULL(PRGRM_ACCEL.PROGRAM_ACCEL_PO, 0) + ISNULL(CPAS.TM_PO, 0)
+        WHEN GUARANTEE_AMT > BASE_TTL_PO + PROGRAM_ACCEL_PO + CPAS_PO THEN GUARANTEE_AMT
+        ELSE BASE_TTL_PO + PROGRAM_ACCEL_PO + CPAS_PO
     END AS PO_AMT
     /******/
     -- INTO tmpTM_PO
     /******/
 FROM
-    DETAIL
-    LEFT JOIN qryGuarantee G ON G.EMP_EMAIL = DETAIL.EID
-    AND G.YYYYMM = DETAIL.YYYYMM
-    LEFT JOIN qryRoster R ON R.REP_EMAIL = DETAIL.EID
-    AND R.[isLATEST?] = 1
-    AND R.ROLE = 'REP'
-    LEFT JOIN PRGRM_ACCEL ON PRGRM_ACCEL.JOIN_KEY = DETAIL.YYYYMM
-    AND PRGRM_ACCEL.SALES_CREDIT_REP_EMAIL = DETAIL.EID
-    LEFT JOIN CPAS ON CPAS.ACCOUNT_OWNER_EMAIL = DETAIL.EID
-    AND CPAS.CPAS_SUBMIT_YYYYMM = DETAIL.YYYYMM
-WHERE
-    DETAIL.YYYYMM = @YYYYMM
+    final_data;
