@@ -20,14 +20,7 @@ WITH ROSTER AS (
                 AND YYYYMM = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
         ) C
     WHERE
-        (
-            ROLE = 'REP' -- OR REP_EMAIL IN (
-            --     'ldasilvacampos@cvrx.com',
-            --     'bkelly@cvrx.com',
-            --     'bsepulvado@cvrx.com',
-            --     'egorman@cvrx.com'
-            -- )
-        )
+        ROLE = 'REP'
         /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
          or is null, and DOH is before or equal to last month. */
         AND FORMAT(ISNULL(DOT, '2099-12-13'), 'yyyy_MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
@@ -43,9 +36,7 @@ ALIGNMENT AS (
     FROM
         qryRoster
     WHERE
-        [isLATEST?] = 1 -- role = 'REP'
-        -- /* CS reps with accounts */
-        -- OR REP_EMAIL IN ('jobrien@cvrx.com', 'ycruea@cvrx.com')
+        [isLATEST?] = 1
 ),
 OPPS AS (
     SELECT
@@ -288,7 +279,24 @@ OPPS2 AS (
                 OPPS.CLOSEDATE,
                 OPPS.NAME
         ) AS QTD_REVENUE_UNITS,
-        ATM.ATM_EMAIL
+        ATM.ATM_EMAIL,
+        /*sales to an ATM targeted account*/
+        CASE
+            WHEN ATM.ATM_EMAIL IS NOT NULL THEN ISNULL(OPPS.SALES_COMMISSIONABLE, 0)
+            ELSE 0
+        END AS ATM_ACCOUNT_REVENUE,
+        SUM(
+            CASE
+                WHEN ATM.ATM_EMAIL IS NOT NULL THEN ISNULL(OPPS.SALES_COMMISSIONABLE, 0)
+                ELSE 0
+            END
+        ) OVER (
+            PARTITION BY ISNULL(OPPS.SALES_CREDIT_REP_EMAIL, ROSTER.REP_EMAIL),
+            ISNULL(OPPS.CLOSE_YYYYQQ, ROSTER.YYYYQQ)
+            ORDER BY
+                ISNULL(OPPS.CLOSEDATE, ROSTER.MONTH_END_DATE),
+                ISNULL(OPPS.NAME, 'ZZZ')
+        ) AS QTD_ATM_ACCT_REV
     FROM
         ROSTER FULL
         OUTER JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
@@ -301,11 +309,6 @@ OPPS2 AS (
 CALC AS (
     SELECT
         *,
-        /*sales to an ATM targeted account*/
-        CASE
-            WHEN ATM_EMAIL IS NOT NULL THEN SALES_COMMISSIONABLE
-            ELSE 0
-        END AS ATM_ACCOUNT_REVENUE,
         CASE
             /* L1_REV value is 0 if there is an ATM who gets credit */
             WHEN ATM_EMAIL IS NOT NULL THEN 0
@@ -315,16 +318,12 @@ CALC AS (
                 /*triggers only if ATM_EMAIL is null AND THRESHOLD <> 0*/
                 ELSE CASE
                     /*if this sale is negative and we're still below threshold then sales*/
-                    WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
-                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN SALES_COMMISSIONABLE
+                    WHEN SALES_COMMISSIONABLE < 0
+                    AND QTD_SALES_COMISSIONABLE <= THRESHOLD THEN SALES_COMMISSIONABLE
                     /*if we are not currently above threshold then all sales are in L1 still*/
-                    WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) <= THRESHOLD THEN ISNULL(SALES_COMMISSIONABLE, 0)
+                    WHEN QTD_SALES_COMISSIONABLE <= THRESHOLD THEN SALES_COMMISSIONABLE
                     /*if we were NOT already above threshold then return a portion/all of this sale up to threshold*/
-                    WHEN (
-                        ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
-                    ) <= THRESHOLD THEN THRESHOLD - (
-                        ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
-                    )
+                    WHEN QTD_SALES_COMISSIONABLE - SALES_COMMISSIONABLE <= THRESHOLD THEN THRESHOLD - (QTD_SALES_COMISSIONABLE - SALES_COMMISSIONABLE)
                     ELSE 0
                 END
             END
@@ -337,26 +336,25 @@ CALC AS (
                 /*triggers only if ATM_EMAIL is null AND THRESHOLD <> 0*/
                 ELSE CASE
                     /*Solve: if this sales is negative and we're currently l2 and previously were in l2 then sales  */
-                    WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
-                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) > THRESHOLD
-                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN SALES_COMMISSIONABLE
+                    WHEN SALES_COMMISSIONABLE < 0
+                    AND QTD_SALES_COMISSIONABLE > THRESHOLD
+                    AND QTD_SALES_COMISSIONABLE - SALES_COMMISSIONABLE > THRESHOLD THEN SALES_COMMISSIONABLE
                     /*Solve: if this sales is negative and we're no longer above threshold but we were before this line item then   */
-                    WHEN ISNULL(SALES_COMMISSIONABLE, 0) < 0
-                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) < THRESHOLD
-                    AND ISNULL(
-                        QTD_SALES_COMISSIONABLE,
-                        0
-                    ) - ISNULL(SALES_COMMISSIONABLE, 0) > THRESHOLD THEN (THRESHOLD - ISNULL(QTD_SALES_COMISSIONABLE, 0)) + ISNULL(SALES_COMMISSIONABLE, 0)
+                    WHEN SALES_COMMISSIONABLE < 0
+                    AND QTD_SALES_COMISSIONABLE < THRESHOLD
+                    AND QTD_SALES_COMISSIONABLE - SALES_COMMISSIONABLE > THRESHOLD THEN (
+                        THRESHOLD - QTD_SALES_COMISSIONABLE
+                    ) + SALES_COMMISSIONABLE
                     /*Solve: if we're already passed quota before this record OR sales is still below Q4BL at this line then 0 sales get passed. */
-                    WHEN (ISNULL(QTD_SALES_COMISSIONABLE, 0)) <= THRESHOLD
-                    OR ISNULL(SALES_COMMISSIONABLE, 0) = 0 THEN 0
+                    WHEN QTD_SALES_COMISSIONABLE <= THRESHOLD
+                    OR SALES_COMMISSIONABLE = 0 THEN 0
                     /*Solve: if we were already at/passed threshold then sales */
                     WHEN (
-                        ISNULL(QTD_SALES_COMISSIONABLE, 0) - ISNULL(SALES_COMMISSIONABLE, 0)
+                        QTD_SALES_COMISSIONABLE - SALES_COMMISSIONABLE
                     ) > THRESHOLD
-                    AND ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN SALES_COMMISSIONABLE
+                    AND QTD_SALES_COMISSIONABLE >= THRESHOLD THEN SALES_COMMISSIONABLE
                     /*Solve: if we are now at/passed threshold and currently less than quota then take the sales over the threshold */
-                    WHEN ISNULL(QTD_SALES_COMISSIONABLE, 0) >= THRESHOLD THEN ISNULL(QTD_SALES_COMISSIONABLE, 0) - THRESHOLD
+                    WHEN QTD_SALES_COMISSIONABLE >= THRESHOLD THEN QTD_SALES_COMISSIONABLE - THRESHOLD
                     ELSE 0
                 END
             END
