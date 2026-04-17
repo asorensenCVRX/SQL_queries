@@ -32,7 +32,7 @@ WITH OPPS AS (
         PHYSICIAN,
         PHYSICIAN_ID,
         /* first, bring in the email from tblSalesSplits. If that's null, bring in tblAlign_Opp.
-         If that's null, bring in the email from tblAlign_Act. And finally, if that is null then bring in
+         If that's null, bring in tblAlign_Act. And finally, if that is null then bring in
          ACT_OWNER_EMAIL from qryOpps. */
         COALESCE(
             AO.EMAIL,
@@ -90,7 +90,7 @@ WITH OPPS AS (
             CLOSE_YYYY = 2026
             OR IMPLANTED_YYYY = 2026
         )
-        AND STAGENAME IN ('Revenue Recognized', 'Implant Completed')
+        AND STAGENAME = 'Revenue Recognized'
 ),
 ROSTER AS (
     SELECT
@@ -121,20 +121,22 @@ ROSTER AS (
 ATM_OPPS AS (
     SELECT
         T.EMAIL AS ATM_EMAIL,
+        R.NAME_REP AS ATM_NAME,
+        R.REGION,
         OPPS.*
     FROM
         OPPS
-        LEFT JOIN tblACCT_TGT T ON T.OBJ_ID = OPPS.ACT_ID
+        INNER JOIN tblACCT_TGT T ON T.OBJ_ID = OPPS.ACT_ID
         AND OPPS.CLOSE_YYYYMM BETWEEN T.YYYYMM_START
         AND T.YYYYMM_END
         AND PO_TYPE = 'MBO'
-    WHERE
-        T.EMAIL IS NOT NULL
+        LEFT JOIN qryRoster R ON T.EMAIL = R.REP_EMAIL
+        AND R.[isLATEST?] = 1
 )
 SELECT
     ISNULL(O.ATM_EMAIL, R.REP_EMAIL) AS ATM_EMAIL,
-    R.NAME_REP AS ATM_NAME,
-    R.REGION,
+    ISNULL(O.ATM_NAME, R.NAME_REP) AS ATM_NAME,
+    ISNULL(O.REGION, R.REGION) AS REGION,
     O.CLOSEDATE,
     ISNULL(O.CLOSE_YYYYMM, R.YYYYMM) AS CLOSE_YYYYMM,
     ISNULL(O.CLOSE_YYYYQQ, R.YYYYQQ) AS CLOSE_YYYYQQ,
