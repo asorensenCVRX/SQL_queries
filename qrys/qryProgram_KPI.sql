@@ -116,7 +116,7 @@ WITH A AS (
                         ACT_ID,
                         COUNT(*) [PATIENTS_IN_FUNNEL]
                     FROM
-                        [dbo].[qryOpps]
+                        [dbo].[tmpOpps]
                     WHERE
                         INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
                         AND REASON_FOR_IMPLANT__C = 'De novo'
@@ -190,13 +190,15 @@ B AS (
                 [IR].[Account],
                 I.FIRST_IMP,
                 I.LAST_IMP,
+                I.FIRST_IMPLANTED_YYYYMM,
+                I.LAST_IMPLANTED_YYYYMM,
                 CASE
                     --   'active, at risk, churned, dormant and pending '
-                    WHEN datediff(mm, I.LAST_IMP, GETDATE()) > 12 THEN 'Churned'
-                    WHEN datediff(mm, I.LAST_IMP, GETDATE()) > 6 THEN 'At-Risk'
-                    WHEN datediff(mm, I.LAST_IMP, GETDATE()) > 3 THEN 'Dormant'
+                    WHEN I.LAST_IMPLANTED_YYYYMM < FORMAT(DATEADD(MONTH, -12, GETDATE()), 'yyyy_MM') THEN 'Churned'
+                    WHEN I.LAST_IMPLANTED_YYYYMM < FORMAT(DATEADD(MONTH, -6, GETDATE()), 'yyyy_MM') THEN 'At-Risk'
+                    WHEN I.LAST_IMPLANTED_YYYYMM < FORMAT(DATEADD(MONTH, -3, GETDATE()), 'yyyy_MM') THEN 'Dormant'
+                    WHEN I.LAST_IMPLANTED_YYYYMM < FORMAT(GETDATE(), 'yyyy_MM') THEN 'Active'
                     WHEN [IR].[IMPLANTS (ALL)] = 0 THEN 'ACU'
-                    ELSE 'Active'
                 END AS [STATUS],
                 [IR].[ACT_ID],
                 [IR].[IDN],
@@ -363,15 +365,19 @@ B AS (
                     SELECT
                         ACT_ID,
                         MAX(cast(IMPLANTED_DT AS DATE)) [LAST_IMP],
-                        MIN(cast(IMPLANTED_DT AS DATE)) [FIRST_IMP]
+                        MIN(cast(IMPLANTED_DT AS DATE)) [FIRST_IMP],
+                        MAX(FORMAT(CAST(IMPLANTED_DT AS DATE), 'yyyy_MM')) AS LAST_IMPLANTED_YYYYMM,
+                        MIN(FORMAT(CAST(IMPLANTED_DT AS DATE), 'yyyy_MM')) AS FIRST_IMPLANTED_YYYYMM
                     FROM
-                        tmpOpps
+                        tmpOpps O
+                        LEFT JOIN qryCalendar C ON CAST(O.IMPLANTED_DT AS DATE) = C.DT
                     WHERE
                         OPP_COUNTRY = 'US'
-                        AND OPP_STATUS = 'CLOSED'
+                        AND STAGENAME IN ('Implant Completed', 'Revenue Recognized')
                         AND ISIMPL = 1
                         AND REASON_FOR_IMPLANT__C = 'De novo'
                         AND INDICATION_FOR_USE__C = 'Heart Failure - Reduced Ejection Fraction'
+                        AND IMPLANTED_YYYYMM < FORMAT(GETDATE(), 'yyyy_MM')
                     GROUP BY
                         ACT_ID
                 ) AS I ON ir.ACT_ID = i.ACT_ID
@@ -833,6 +839,8 @@ Q AS
                 X.SRC,
                 X.FIRST_IMP,
                 X.LAST_IMP,
+                X.FIRST_IMPLANTED_YYYYMM,
+                X.LAST_IMPLANTED_YYYYMM,
                 X.[STATUS],
                 X.[IMPLANTS (ALL)],
                 X.[IMPLANTS (R12)],
@@ -931,6 +939,8 @@ Q AS
                         A.SRC,
                         B.FIRST_IMP,
                         B.LAST_IMP,
+                        B.FIRST_IMPLANTED_YYYYMM,
+                        B.LAST_IMPLANTED_YYYYMM,
                         [STATUS],
                         ISNULL(B.[IMPLANTS (ALL)], 0) AS [IMPLANTS (ALL)],
                         ISNULL(B.[IMPLANTS (R12)], 0) AS [IMPLANTS (R12)],
