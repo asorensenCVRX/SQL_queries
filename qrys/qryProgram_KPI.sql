@@ -37,15 +37,13 @@ WITH A AS (
         ACCOUNT_TIER
     FROM
         (
-            /* this first part of the union query is bringing in accounts from SFDC */
+            /* this first part of the union query is bringing in ALL CUSTOMER accounts from SFDC */
             SELECT
-                --'SFDC' AS [ACCOUNT_SRC], 
                 CAST(C.DHC_ACCOUNT_ID__C AS VARCHAR) [Definitive ID],
                 CAST(C.CMS_ID__C AS VARCHAR) AS [PROVIDER_ID],
-                --       C.ID [SFDC_ID], 
-                ISNULL(B.NAME_REP, e.NAME_REP) AS [REP],
-                ISNULL(B.REP_EMAIL, E.REP_EMAIL) AS [REP_EMAIL],
-                ISNULL(B.REGION, e.REGION) AS [REGION],
+                B.NAME_REP AS [REP],
+                B.REP_EMAIL,
+                B.REGION,
                 E.TERR_ID,
                 (c.cbsa + ' - ' + c.cbsa_name) [CBSA],
                 C.NAME,
@@ -85,12 +83,8 @@ WITH A AS (
                 TRY_CAST(LEFT(C.Account_Tier__c, 1) AS INT) AS ACCOUNT_TIER
             FROM
                 qryCust C
-                LEFT JOIN (
-                    SELECT
-                        DISTINCT *
-                    FROM
-                        qryZipAlign
-                ) E ON c.SHIPPINGPOSTALCODE = E.ZIP_CODE
+                /* get territory_id */
+                LEFT JOIN qryZipAlign E ON c.SHIPPINGPOSTALCODE = E.ZIP_CODE
                 LEFT JOIN (
                     SELECT
                         REP_EMAIL,
@@ -130,9 +124,9 @@ WITH A AS (
                 C.SHIPPINGCOUNTRY = 'USA'
             UNION
             ALL
-            /* this second part of the union query is bringing in accounts from DHC */
+            /* this second part of the union query is bringing in accounts from dhcAccounts
+             where the DHC ID is NOT already on an SFDC customer account */
             SELECT
-                --'DHC' AS [ACCOUNT_SRC], 
                 CAST(STR(T.[Definitive ID]) AS VARCHAR) [Definitive ID],
                 CAST(t.[Provider Number] AS VARCHAR) [Provider Number],
                 ISNULL(E.NAME_REP, 'Unassigned') AS [REP],
@@ -153,12 +147,7 @@ WITH A AS (
                 0 AS TIER
             FROM
                 qryCust_DHC T
-                LEFT JOIN (
-                    SELECT
-                        DISTINCT *
-                    FROM
-                        qryZipAlign
-                ) E ON RIGHT('00000' + T.ZIPCode, 5) = E.ZIP_CODE
+                LEFT JOIN qryZipAlign E ON RIGHT('00000' + T.ZIPCode, 5) = E.ZIP_CODE
                 LEFT JOIN tblAccount_Mapping A ON TRIM(
                     CAST(T.[Definitive ID] AS VARCHAR(50))
                 ) = TRIM(A.[Definitive ID])
@@ -180,7 +169,6 @@ WITH A AS (
 /* CTE B brings in implant, revenue, ARC, and surgeon data */
 B AS (
     SELECT
-        --    , s.*
         M.*,
         C.CMS_ID__C,
         c.DHC_ACCOUNT_ID__C
@@ -193,7 +181,6 @@ B AS (
                 I.FIRST_IMPLANTED_YYYYMM,
                 I.LAST_IMPLANTED_YYYYMM,
                 CASE
-                    --   'active, at risk, churned, dormant and pending '
                     WHEN I.LAST_IMPLANTED_YYYYMM < FORMAT(DATEADD(MONTH, -12, GETDATE()), 'yyyy_MM') THEN 'Churned'
                     WHEN I.LAST_IMPLANTED_YYYYMM < FORMAT(DATEADD(MONTH, -6, GETDATE()), 'yyyy_MM') THEN 'At-Risk'
                     WHEN I.LAST_IMPLANTED_YYYYMM < FORMAT(DATEADD(MONTH, -3, GETDATE()), 'yyyy_MM') THEN 'Dormant'
@@ -820,7 +807,6 @@ Q2 AS (
         ISNULL(Z.[CRT and ICD], 0) AS [CRT and ICD],
         ISNULL(Z.Mitraclip, 0) AS Mitraclip,
         ISNULL(Z.Watchman, 0) AS Watchman,
-        -- ISNULL(Z.Tier, 4) AS Tier,
         ISNULL(
             CASE
                 WHEN X.ACCOUNT_TIER IN (0, NULL) THEN Z.Tier
