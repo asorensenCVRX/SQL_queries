@@ -699,9 +699,219 @@ BP AS (
     WHERE
         Status__c = 'Active'
 ),
-Q AS
-/* QUERY STARTS HERE */
-(
+Q1 AS (
+    SELECT
+        A.NAME,
+        A.CITY_STATE,
+        A.STAGE,
+        A.ACCOUNT_TIER,
+        A.REP_RANK,
+        ISNULL(A.IDN, B.IDN) AS IDN,
+        A.PATIENTS_IN_FUNNEL,
+        ISNULL(A.REP, B.ACT_OWNER_NAME) AS ACT_OWNER,
+        A.REP_EMAIL,
+        A.REP,
+        A.REGION,
+        A.TERR_ID,
+        CAST(
+            ISNULL(A.[Definitive ID], B.DHC_ACCOUNT_ID__C) AS VARCHAR(MAX)
+        ) AS [Definitive ID],
+        CAST(
+            ISNULL(A.PROVIDER_ID, B.CMS_ID__C) AS VARCHAR(MAX)
+        ) AS CMS_ID,
+        CAST(ISNULL(A.ID, B.ACT_ID) AS VARCHAR(MAX)) AS SFDC_ID,
+        A.ZIP_5,
+        A.CBSA,
+        A.SRC,
+        B.FIRST_IMP,
+        B.LAST_IMP,
+        B.FIRST_IMPLANTED_YYYYMM,
+        B.LAST_IMPLANTED_YYYYMM,
+        [STATUS],
+        ISNULL(B.[IMPLANTS (ALL)], 0) AS [IMPLANTS (ALL)],
+        ISNULL(B.[IMPLANTS (R12)], 0) AS [IMPLANTS (R12)],
+        ISNULL(B.[IMPLANTS (R6)], 0) AS [IMPLANTS (R6)],
+        ISNULL(B.[REV_UNITS (ALL)], 0) AS [REV_UNITS (ALL)],
+        ISNULL(B.[REV_UNITS (R12)], 0) AS [REV_UNITS (R12)],
+        ISNULL(B.[REV_UNITS (R6)], 0) AS [REV_UNITS (R6)],
+        ISNULL(B.[REV_$ (ALL)], 0) AS [REV_$ (ALL)],
+        ISNULL(B.[REV_$ (R12)], 0) AS [REV_$ (R12)],
+        ISNULL(B.[REV_$ (R6)], 0) AS [REV_$ (R6)],
+        ISNULL(B.[SURG (ALL)], 0) AS [SURG (ALL)],
+        ISNULL(B.[SURG (R12)], 0) AS [SURG (R12)],
+        ISNULL(B.[SURG (R6)], 0) AS [SURG (R6)],
+        ISNULL(B.[ARC (All)], 0) AS [ARC (All)],
+        ISNULL(B.[ARC (R12)], 0) AS [ARC (R12)],
+        ISNULL(B.[ARC (R6)], 0) AS [ARC (R6)],
+        ISNULL(B.[PRESCRIBER (All)], 0) AS [PRESCRIBER (ALL)],
+        ISNULL(B.[PRESCRIBER (R12)], 0) AS [PRESCRIBER (R12)],
+        ISNULL(B.[PRESCRIBER (R6)], 0) AS [PRESCRIBER (R6)],
+        ISNULL(DP.DISTINCT_ARC_AND_PRESC, 0) AS DISTINCT_ARC_AND_PRESC
+    FROM
+        A FULL
+        JOIN b ON a.ID = b.ACT_ID
+        LEFT JOIN DISTINCT_PHYS DP ON DP.ACT_ID = ISNULL(A.ID, B.ACT_ID)
+),
+Q2 AS (
+    SELECT
+        X.NAME,
+        X.CITY_STATE,
+        X.STAGE,
+        X.REP_RANK,
+        X.IDN,
+        X.PATIENTS_IN_FUNNEL,
+        X.ACT_OWNER,
+        X.REP_EMAIL,
+        X.REP,
+        ISNULL(T.REGION_NM, X.REGION) AS REGION,
+        ISNULL(D.DE_FACTO_TERR, X.TERR_ID) AS DE_FACTO_TERR_ID,
+        T.TERR_NM,
+        CASE
+            WHEN TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID])) = '0' THEN NULL
+            ELSE TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID]))
+        END AS [Definitive ID],
+        CASE
+            WHEN TRIM(
+                ISNULL(
+                    CAST(Z.[CMS ID] AS VARCHAR(MAX)),
+                    CAST(X.CMS_ID AS VARCHAR(MAX))
+                )
+            ) = '0' THEN NULL
+            ELSE TRIM(
+                ISNULL(
+                    CAST(Z.[CMS ID] AS VARCHAR(MAX)),
+                    CAST(X.CMS_ID AS VARCHAR(MAX))
+                )
+            )
+        END AS CMS_ID,
+        X.SFDC_ID,
+        X.ZIP_5,
+        X.CBSA,
+        X.SRC,
+        X.FIRST_IMP,
+        X.LAST_IMP,
+        X.FIRST_IMPLANTED_YYYYMM,
+        X.LAST_IMPLANTED_YYYYMM,
+        X.[STATUS],
+        X.[IMPLANTS (ALL)],
+        X.[IMPLANTS (R12)],
+        X.[IMPLANTS (R6)],
+        X.[REV_UNITS (ALL)],
+        X.[REV_UNITS (R12)],
+        X.[REV_UNITS (R6)],
+        X.[REV_$ (ALL)],
+        X.[REV_$ (R12)],
+        X.[REV_$ (R6)],
+        X.[SURG (ALL)],
+        X.[SURG (R12)],
+        X.[SURG (R6)],
+        X.[ARC (All)],
+        X.[ARC (R12)],
+        X.[ARC (R6)],
+        X.[PRESCRIBER (ALL)],
+        X.[PRESCRIBER (R12)],
+        X.[PRESCRIBER (R6)],
+        X.DISTINCT_ARC_AND_PRESC,
+        ISNULL(BP.ADMIN_CHAMPIONS, 0) AS ADMIN_CHAMPIONS,
+        ISNULL(BP.CLINICAL_CHAMPIONS, 0) AS CLINICAL_CHAMPIONS,
+        ISNULL(Z.[HF Diagnosis], 0) AS [HF Diagnosis],
+        ISNULL(Z.CardioMEMS, 0) AS CardioMEMS,
+        ISNULL(Z.LVAD, 0) AS LVAD,
+        ISNULL(Z.[CRT and ICD], 0) AS [CRT and ICD],
+        ISNULL(Z.Mitraclip, 0) AS Mitraclip,
+        ISNULL(Z.Watchman, 0) AS Watchman,
+        -- ISNULL(Z.Tier, 4) AS Tier,
+        ISNULL(
+            CASE
+                WHEN X.ACCOUNT_TIER IN (0, NULL) THEN Z.Tier
+                ELSE X.ACCOUNT_TIER
+            END,
+            4
+        ) AS [Tier],
+        CASE
+            WHEN X.[IMPLANTS (ALL)] >= 15 THEN 1
+            ELSE 0
+        END AS [VOLUME_METRIC_MET?],
+        CASE
+            WHEN [DISTINCT_ARC_AND_PRESC] >= 5 THEN 1
+            ELSE 0
+        END AS [REFERRER_METRIC_MET?],
+        CASE
+            WHEN [SURG (R12)] >= 2 THEN 1
+            ELSE 0
+        END AS [SURGEON_METRIC_MET?],
+        CASE
+            WHEN BP.ADMIN_CHAMPIONS >= 1 THEN 1
+            ELSE 0
+        END AS [ADMIN_CHAMPION_METRIC_MET?],
+        CASE
+            WHEN BP.CLINICAL_CHAMPIONS >= 1 THEN 1
+            ELSE 0
+        END AS [CLINICAL_CHAMPION_METRIC_MET?],
+        CASE
+            WHEN BP.Status__c = 'Active' THEN 'Yes'
+            ELSE 'No'
+        END AS [Blueprint Completed?],
+        BP.Blueprint_Type__c AS [Blueprint Type],
+        BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
+        BP.BP_ID AS BLUEPRINT_ID,
+        CASE
+            WHEN BP_ID IS NULL THEN NULL
+            ELSE CONCAT(
+                'https://cvrx.lightning.force.com/lightning/r/Blueprint__c/',
+                BP_ID,
+                '/view'
+            )
+        END AS BLUEPRINT_LINK
+    FROM
+        Q1 AS X
+        /* Retrieves the top matching account mapping per row (preferring Salesforce ID over Definitive ID, with whitespace trimmed), 
+         while preserving unmatched rows via OUTER APPLY. */
+        OUTER APPLY(
+            SELECT
+                TOP 1 *
+            FROM
+                tblAccount_Mapping AS AM
+            WHERE
+                TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID)
+                OR TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID])
+            ORDER BY
+                CASE
+                    WHEN TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID) THEN 1
+                    WHEN TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID]) THEN 2
+                END
+        ) AS Z
+        /* bring in de-facto territory assignments */
+        LEFT JOIN qryDE_FACTO_ASSIGNMENTS D ON X.SFDC_ID = D.ACT_ID
+        /* bring in territory names */
+        LEFT JOIN (
+            SELECT
+                T.TERRITORY_ID,
+                ISNULL(
+                    R.TERR_NM,
+                    CONCAT(T.TERRITORY, ' (OPEN)')
+                ) AS TERR_NM,
+                T.REGION_ID,
+                T.REGION AS REGION_NM,
+                ROW_NUMBER() OVER (
+                    PARTITION BY T.TERRITORY_ID
+                    ORDER BY
+                        T.END_DT DESC
+                ) AS RN
+            FROM
+                tblTerritory T
+                LEFT JOIN qryRoster R ON T.TERRITORY_ID = R.TERRITORY_ID
+                AND R.ROLE = 'REP'
+                AND R.[isLATEST?] = 1
+                AND R.[STATUS] = 'ACTIVE'
+            WHERE
+                T.TERRITORY_ID NOT LIKE '%OFF'
+                AND T.TERRITORY_ID NOT LIKE 'MDR%'
+                AND T.END_DT > GETDATE()
+        ) AS T ON ISNULL(D.DE_FACTO_TERR, X.TERR_ID) = T.TERRITORY_ID
+        LEFT JOIN BP ON X.SFDC_ID = BP.Account__c
+),
+Q3 AS (
     SELECT
         Y.*,
         CM.[R6_MONTHS_W_IMPLANT],
@@ -801,220 +1011,12 @@ Q AS
             ELSE NULL
         END AS [PARENT_ID]
     FROM
-        (
-            SELECT
-                X.NAME,
-                X.CITY_STATE,
-                X.STAGE,
-                X.REP_RANK,
-                X.IDN,
-                X.PATIENTS_IN_FUNNEL,
-                X.ACT_OWNER,
-                X.REP_EMAIL,
-                X.REP,
-                ISNULL(T.REGION_NM, X.REGION) AS REGION,
-                ISNULL(D.DE_FACTO_TERR, X.TERR_ID) AS DE_FACTO_TERR_ID,
-                T.TERR_NM,
-                CASE
-                    WHEN TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID])) = '0' THEN NULL
-                    ELSE TRIM(ISNULL(Z.[Definitive ID], X.[Definitive ID]))
-                END AS [Definitive ID],
-                CASE
-                    WHEN TRIM(
-                        ISNULL(
-                            CAST(Z.[CMS ID] AS VARCHAR(MAX)),
-                            CAST(X.CMS_ID AS VARCHAR(MAX))
-                        )
-                    ) = '0' THEN NULL
-                    ELSE TRIM(
-                        ISNULL(
-                            CAST(Z.[CMS ID] AS VARCHAR(MAX)),
-                            CAST(X.CMS_ID AS VARCHAR(MAX))
-                        )
-                    )
-                END AS CMS_ID,
-                X.SFDC_ID,
-                X.ZIP_5,
-                X.CBSA,
-                X.SRC,
-                X.FIRST_IMP,
-                X.LAST_IMP,
-                X.FIRST_IMPLANTED_YYYYMM,
-                X.LAST_IMPLANTED_YYYYMM,
-                X.[STATUS],
-                X.[IMPLANTS (ALL)],
-                X.[IMPLANTS (R12)],
-                X.[IMPLANTS (R6)],
-                X.[REV_UNITS (ALL)],
-                X.[REV_UNITS (R12)],
-                X.[REV_UNITS (R6)],
-                X.[REV_$ (ALL)],
-                X.[REV_$ (R12)],
-                X.[REV_$ (R6)],
-                X.[SURG (ALL)],
-                X.[SURG (R12)],
-                X.[SURG (R6)],
-                X.[ARC (All)],
-                X.[ARC (R12)],
-                X.[ARC (R6)],
-                X.[PRESCRIBER (ALL)],
-                X.[PRESCRIBER (R12)],
-                X.[PRESCRIBER (R6)],
-                X.DISTINCT_ARC_AND_PRESC,
-                ISNULL(BP.ADMIN_CHAMPIONS, 0) AS ADMIN_CHAMPIONS,
-                ISNULL(BP.CLINICAL_CHAMPIONS, 0) AS CLINICAL_CHAMPIONS,
-                ISNULL(Z.[HF Diagnosis], 0) AS [HF Diagnosis],
-                ISNULL(Z.CardioMEMS, 0) AS CardioMEMS,
-                ISNULL(Z.LVAD, 0) AS LVAD,
-                ISNULL(Z.[CRT and ICD], 0) AS [CRT and ICD],
-                ISNULL(Z.Mitraclip, 0) AS Mitraclip,
-                ISNULL(Z.Watchman, 0) AS Watchman,
-                -- ISNULL(Z.Tier, 4) AS Tier,
-                ISNULL(
-                    CASE
-                        WHEN X.ACCOUNT_TIER IN (0, NULL) THEN Z.Tier
-                        ELSE X.ACCOUNT_TIER
-                    END,
-                    4
-                ) AS [Tier],
-                CASE
-                    WHEN X.[IMPLANTS (ALL)] >= 15 THEN 1
-                    ELSE 0
-                END AS [VOLUME_METRIC_MET?],
-                CASE
-                    WHEN [DISTINCT_ARC_AND_PRESC] >= 5 THEN 1
-                    ELSE 0
-                END AS [REFERRER_METRIC_MET?],
-                CASE
-                    WHEN [SURG (R12)] >= 2 THEN 1
-                    ELSE 0
-                END AS [SURGEON_METRIC_MET?],
-                CASE
-                    WHEN BP.ADMIN_CHAMPIONS >= 1 THEN 1
-                    ELSE 0
-                END AS [ADMIN_CHAMPION_METRIC_MET?],
-                CASE
-                    WHEN BP.CLINICAL_CHAMPIONS >= 1 THEN 1
-                    ELSE 0
-                END AS [CLINICAL_CHAMPION_METRIC_MET?],
-                CASE
-                    WHEN BP.Status__c = 'Active' THEN 'Yes'
-                    ELSE 'No'
-                END AS [Blueprint Completed?],
-                BP.Blueprint_Type__c AS [Blueprint Type],
-                BP.ASD_Sign_Date__c AS [Blueprint Sign Date],
-                BP.BP_ID AS BLUEPRINT_ID,
-                CASE
-                    WHEN BP_ID IS NULL THEN NULL
-                    ELSE CONCAT(
-                        'https://cvrx.lightning.force.com/lightning/r/Blueprint__c/',
-                        BP_ID,
-                        '/view'
-                    )
-                END AS BLUEPRINT_LINK
-            FROM
-                (
-                    SELECT
-                        A.NAME,
-                        A.CITY_STATE,
-                        A.STAGE,
-                        A.ACCOUNT_TIER,
-                        A.REP_RANK,
-                        ISNULL(A.IDN, B.IDN) AS IDN,
-                        A.PATIENTS_IN_FUNNEL,
-                        ISNULL(A.REP, B.ACT_OWNER_NAME) AS ACT_OWNER,
-                        A.REP_EMAIL,
-                        A.REP,
-                        A.REGION,
-                        A.TERR_ID,
-                        CAST(
-                            ISNULL(A.[Definitive ID], B.DHC_ACCOUNT_ID__C) AS VARCHAR(MAX)
-                        ) AS [Definitive ID],
-                        CAST(
-                            ISNULL(A.PROVIDER_ID, B.CMS_ID__C) AS VARCHAR(MAX)
-                        ) AS CMS_ID,
-                        CAST(ISNULL(A.ID, B.ACT_ID) AS VARCHAR(MAX)) AS SFDC_ID,
-                        A.ZIP_5,
-                        A.CBSA,
-                        A.SRC,
-                        B.FIRST_IMP,
-                        B.LAST_IMP,
-                        B.FIRST_IMPLANTED_YYYYMM,
-                        B.LAST_IMPLANTED_YYYYMM,
-                        [STATUS],
-                        ISNULL(B.[IMPLANTS (ALL)], 0) AS [IMPLANTS (ALL)],
-                        ISNULL(B.[IMPLANTS (R12)], 0) AS [IMPLANTS (R12)],
-                        ISNULL(B.[IMPLANTS (R6)], 0) AS [IMPLANTS (R6)],
-                        ISNULL(B.[REV_UNITS (ALL)], 0) AS [REV_UNITS (ALL)],
-                        ISNULL(B.[REV_UNITS (R12)], 0) AS [REV_UNITS (R12)],
-                        ISNULL(B.[REV_UNITS (R6)], 0) AS [REV_UNITS (R6)],
-                        ISNULL(B.[REV_$ (ALL)], 0) AS [REV_$ (ALL)],
-                        ISNULL(B.[REV_$ (R12)], 0) AS [REV_$ (R12)],
-                        ISNULL(B.[REV_$ (R6)], 0) AS [REV_$ (R6)],
-                        ISNULL(B.[SURG (ALL)], 0) AS [SURG (ALL)],
-                        ISNULL(B.[SURG (R12)], 0) AS [SURG (R12)],
-                        ISNULL(B.[SURG (R6)], 0) AS [SURG (R6)],
-                        ISNULL(B.[ARC (All)], 0) AS [ARC (All)],
-                        ISNULL(B.[ARC (R12)], 0) AS [ARC (R12)],
-                        ISNULL(B.[ARC (R6)], 0) AS [ARC (R6)],
-                        ISNULL(B.[PRESCRIBER (All)], 0) AS [PRESCRIBER (ALL)],
-                        ISNULL(B.[PRESCRIBER (R12)], 0) AS [PRESCRIBER (R12)],
-                        ISNULL(B.[PRESCRIBER (R6)], 0) AS [PRESCRIBER (R6)],
-                        ISNULL(DP.DISTINCT_ARC_AND_PRESC, 0) AS DISTINCT_ARC_AND_PRESC
-                    FROM
-                        A FULL
-                        JOIN b ON a.ID = b.ACT_ID
-                        LEFT JOIN DISTINCT_PHYS DP ON DP.ACT_ID = ISNULL(A.ID, B.ACT_ID)
-                ) AS X
-                OUTER APPLY(
-                    SELECT
-                        TOP 1 *
-                    FROM
-                        tblAccount_Mapping AS AM
-                    WHERE
-                        TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID)
-                        OR TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID])
-                    ORDER BY
-                        CASE
-                            WHEN TRIM(AM.[Salesforce ID]) = TRIM(X.SFDC_ID) THEN 1
-                            WHEN TRIM(AM.[Definitive ID]) = TRIM(X.[Definitive ID]) THEN 2
-                        END
-                ) AS Z
-                /* bring in de-facto territory assignments */
-                LEFT JOIN qryDE_FACTO_ASSIGNMENTS D ON X.SFDC_ID = D.ACT_ID
-                /* bring in territory names */
-                LEFT JOIN (
-                    SELECT
-                        T.TERRITORY_ID,
-                        ISNULL(
-                            R.TERR_NM,
-                            CONCAT(T.TERRITORY, ' (OPEN)')
-                        ) AS TERR_NM,
-                        T.REGION_ID,
-                        T.REGION AS REGION_NM,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY T.TERRITORY_ID
-                            ORDER BY
-                                T.END_DT DESC
-                        ) AS RN
-                    FROM
-                        tblTerritory T
-                        LEFT JOIN qryRoster R ON T.TERRITORY_ID = R.TERRITORY_ID
-                        AND R.ROLE = 'REP'
-                        AND R.[isLATEST?] = 1
-                        AND R.[STATUS] = 'ACTIVE'
-                    WHERE
-                        T.TERRITORY_ID NOT LIKE '%OFF'
-                        AND T.TERRITORY_ID NOT LIKE 'MDR%'
-                        AND T.END_DT > GETDATE()
-                ) AS T ON ISNULL(D.DE_FACTO_TERR, X.TERR_ID) = T.TERRITORY_ID
-                LEFT JOIN BP ON X.SFDC_ID = BP.Account__c
-        ) AS Y
+        Q2 AS Y
         LEFT JOIN CM ON Y.SFDC_ID = CM.ACT_ID
 )
 SELECT
     *
 FROM
-    Q
+    Q3
 WHERE
     [EXCLUDE?] = 'NO';
