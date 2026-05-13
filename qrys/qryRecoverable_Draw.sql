@@ -26,15 +26,30 @@ PO AS (
             WHEN [ROLE] = 'RM' THEN 'ASD'
             ELSE [ROLE]
         END AS [ROLE],
-        TRY_CAST(VALUE AS MONEY) AS AMT_EARNED
+        TRY_CAST(VALUE AS MONEY) AS AMT_EARNED,
+        CASE
+            WHEN EXISTS (
+                SELECT
+                    1
+                FROM
+                    tblPayout P
+                WHERE
+                    CATEGORY = 'ADJUSTMENTS'
+                    AND TRY_CAST(VALUE AS MONEY) <> 0
+                    AND PO.EID = P.EID
+                    AND PO.YYYYMM = P.YYYYMM
+            ) THEN 1
+            ELSE 0
+        END AS [MONTH_HAS_ADJUSTMENT?]
     FROM
-        tblPayout
+        tblPayout PO
     WHERE
         CATEGORY = 'TTL_PO'
 )
 SELECT
     G.YYYYMM,
     G.EMP_EMAIL,
+    G.GUR_AMT,
     CASE
         WHEN PO.AMT_EARNED > G.GUR_AMT THEN 0
         ELSE G.GUR_AMT
@@ -44,7 +59,8 @@ SELECT
     CASE
         WHEN PO.AMT_EARNED > G.GUR_AMT THEN 0
         ELSE GUR_AMT - AMT_EARNED
-    END AS RECOVERABLE_DRAW
+    END AS RECOVERABLE_DRAW,
+    PO.[MONTH_HAS_ADJUSTMENT?]
 FROM
     G
     LEFT JOIN PO ON PO.YYYYMM = G.YYYYMM
