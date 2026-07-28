@@ -77,10 +77,15 @@ OPPS AS (
         O.NAME,
         PHYSICIAN,
         PHYSICIAN_ID,
-        /* first, bring in the email from tblAlign_Opp.
-         If that's null, bring in the email from tblAlign_Act. And finally, if that is null then bring in
+        /* first, bring in the email from tblSalesSplits.
+         If that's null, bring in the email from tblAlign_Opp, then tblAlign_Act, and finally, if that is null then bring in
          ACT_OWNER_EMAIL from qryOpps. */
-        COALESCE(AO.EMAIL, AA.OWNER_EMAIL, O.ACT_OWNER_EMAIL) AS SALES_CREDIT_REP_EMAIL,
+        COALESCE(
+            S.SALES_CREDIT_REP_EMAIL,
+            AO.EMAIL,
+            AA.OWNER_EMAIL,
+            O.ACT_OWNER_EMAIL
+        ) AS SALES_CREDIT_REP_EMAIL,
         INDICATION_FOR_USE__C,
         REASON_FOR_IMPLANT__C,
         ISIMPL,
@@ -175,6 +180,8 @@ QUOTA AS (
             FROM
                 qryQuota_Monthly Q
                 INNER JOIN qryRoster_RM R ON Q.EID = R.EMP_EMAIL
+            WHERE
+                Q.TERRITORY_ID LIKE 'RE%'
         ) AS A
     GROUP BY
         YYYYQQ,
@@ -262,7 +269,8 @@ FROM
                         OPPS.CLOSE_YYYYQQ
                         ORDER BY
                             OPPS.CLOSEDATE,
-                            OPPS.NAME
+                            OPPS.NAME,
+                            OPPS.SALES_CREDIT_REP_EMAIL ROWS UNBOUNDED PRECEDING
                     ) AS QTD_SALES_COMMISSIONABLE,
                     /* make sure implants are only counted based on impl date, not closedate */
                     SUM(ISNULL(IMPLANT_UNITS, 0)) OVER(
@@ -270,14 +278,16 @@ FROM
                         OPPS.IMPLANTED_YYYYQQ
                         ORDER BY
                             ISNULL(OPPS.IMPLANTED_DT, OPPS.CLOSEDATE),
-                            OPPS.NAME
+                            OPPS.NAME,
+                            OPPS.SALES_CREDIT_REP_EMAIL ROWS UNBOUNDED PRECEDING
                     ) AS QTD_IMPLANT_UNITS,
                     SUM(ISNULL(REVENUE_UNITS, 0)) OVER(
                         PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
                         OPPS.CLOSE_YYYYQQ
                         ORDER BY
                             OPPS.CLOSEDATE,
-                            OPPS.NAME
+                            OPPS.NAME,
+                            OPPS.SALES_CREDIT_REP_EMAIL ROWS UNBOUNDED PRECEDING
                     ) AS QTD_REVENUE_UNITS
                 FROM
                     ROSTER
@@ -287,7 +297,6 @@ FROM
                     LEFT JOIN tblRates_RM R ON R.REGION_ID = ISNULL(ROSTER.REGION_ID, ALIGNMENT.REGION_ID)
                     LEFT JOIN QUOTA ON ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL) = QUOTA.EID
                     AND OPPS.CLOSE_YYYYQQ = QUOTA.YYYYQQ
-            ) AS A
-        -- WHERE
-        --     CLOSE_YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+            ) AS A -- WHERE
+            --     CLOSE_YYYYMM <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
     ) AS B
