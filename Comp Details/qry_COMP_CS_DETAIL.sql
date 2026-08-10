@@ -139,7 +139,7 @@ FROM
                     SALES FULL
                     OUTER JOIN ROSTER RL ON SALES.REG_ID = RL.REGION_ID
                     /* ensure no credit is given for sales before DOH */
-                    AND SALES.CLOSE_YYYYMM >= RL.ACTIVE_YYYYMM
+                    AND SALES.CLOSEDATE >= RL.ROLE_START_DT
                     /* ensure no credit is given for sales after DOT */
                     AND SALES.CLOSEDATE <= ISNULL(DOT, '2099-12-31')
                     /* sales splits */
