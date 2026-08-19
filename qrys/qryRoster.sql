@@ -50,6 +50,10 @@ WITH R AS (
             ELSE A.START_DT
         END AS [ROLE_START_DT],
         A.END_DT AS [ROLE_END_DT],
+        CASE
+            WHEN a.end_DT = '12/31/2099' THEN NULL
+            ELSE CAST(YEAR(A.END_DT) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(A.END_DT) AS VARCHAR), 2)
+        END AS ROLE_END_YYYYMM,
         CAST(YEAR(A.START_DT) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(A.START_DT) AS VARCHAR), 2) AS ACTIVE_YYYYMM,
         CAST(YEAR(D.DOH) AS VARCHAR) + '_' + RIGHT('Q' + CAST(DATEPART(q, D.DOH) AS VARCHAR), 2) AS DOH_YYYYQQ,
         CAST(YEAR(D.DOH) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(D.DOH) AS VARCHAR), 2) AS DOH_YYYYMM,
@@ -76,7 +80,8 @@ WITH R AS (
                     ELSE 0
                 END
             ) = 1
-            AND D.DOT IS NOT NULL THEN d.dot
+            AND D.DOT IS NOT NULL
+            AND D.DOT <= a.END_DT THEN d.dot
             ELSE A.END_DT
         END AS DOT,
         CASE
@@ -91,13 +96,14 @@ WITH R AS (
                     ELSE 0
                 END
             ) = 1
-            AND D.DOT IS NOT NULL THEN CAST(YEAR(D.DOT) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(d.DOT) AS VARCHAR), 2)
+            AND D.DOT IS NOT NULL
+            AND D.DOT <= a.END_DT THEN CAST(YEAR(D.DOT) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(d.DOT) AS VARCHAR), 2)
             ELSE CAST(YEAR(A.END_DT) AS VARCHAR) + '_' + RIGHT('0' + CAST(MONTH(A.END_DT) AS VARCHAR), 2)
         END AS DOT_YYYYMM,
         E.LNAME AS LNAME_RM,
         z.TIER [Tier],
         f.[isTargetedCSR?],
-        d.[isActivated],
+        b.[activated] [isactivated],
         CASE
             WHEN GETDATE() > A.END_DT THEN 'TERMED'
             ELSE 'ACTIVE'
