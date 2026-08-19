@@ -154,8 +154,61 @@ X AS (
             OR END_DT BETWEEN ISNULL(E.[START], '2025-01-01')
             AND ISNULL(E.[END], '2099-12-31')
         )
+),
+D AS (
+    SELECT
+        DISTINCT *
+    FROM
+        X
+),
+TERR AS (
+    SELECT
+        CASE
+            WHEN CHARINDEX('_OFF', TERRITORY_ID) > 0 THEN LEFT(
+                TERRITORY_ID,
+                CHARINDEX('_OFF', TERRITORY_ID) - 1
+            )
+            ELSE TERRITORY_ID
+        END AS TERRITORY_ID,
+        TERRITORY,
+        START_DT,
+        END_DT,
+        REGION_ID,
+        ROW_NUMBER() OVER (
+            PARTITION BY TERRITORY_ID
+            ORDER BY
+                START_DT ASC
+        ) AS RN,
+        CASE
+            WHEN LAG(END_DT) OVER (
+                PARTITION BY TERRITORY_ID
+                ORDER BY
+                    START_DT ASC
+            ) <> DATEADD(DAY, -1, START_DT) THEN 1
+            ELSE 0
+        END AS END_DT_FLAG
+    FROM
+        tblTerritory
+    WHERE
+        TERRITORY_ID LIKE 'TERR%'
 )
 SELECT
-    DISTINCT *
+    NAME,
+    ACT_ID,
+    ZIP,
+    OWNER_EMAIL,
+    ST_DT,
+    D.END_DT,
+    REP_TERR_ID,
+    ZIP_TERR_ID,
+    [TERR_MISMATCH?],
+    COVERAGE_TYPE,
+    CASE
+        WHEN TERR.TERRITORY_ID IS NULL THEN ISNULL(REP_TERR_ID, ZIP_TERR_ID)
+        ELSE ISNULL(DE_FACTO_TERR_ID, ZIP_TERR_ID)
+    END AS DE_FACTO_TERR_ID
 FROM
-    X
+    D
+    LEFT JOIN TERR ON D.DE_FACTO_TERR_ID = TERR.TERRITORY_ID
+    AND D.END_DT BETWEEN TERR.START_DT
+    AND TERR.END_DT
