@@ -1001,7 +1001,7 @@ Q3 AS (
         LEFT JOIN CM ON Y.SFDC_ID = CM.ACT_ID
 )
 SELECT
-    *
+    DISTINCT *
 FROM
     Q3
 WHERE
