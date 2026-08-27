@@ -519,6 +519,23 @@ trial AS (
         sfdcProc
     WHERE
         TRIAL__C = 'a0aUY00000PjNA9YAN'
+),
+BC AS (
+    SELECT
+        TOP 1 WITH TIES *
+    FROM
+        sfdcBarostimConnect
+    WHERE
+        IsDeleted = 0
+        AND Opportunity__c IS NOT NULL
+    ORDER BY
+        ROW_NUMBER() OVER (
+            PARTITION BY Opportunity__c
+            ORDER BY
+                Active__c DESC,
+                CREATEDDATE DESC,
+                ID DESC
+        )
 )
 SELECT
     A.*,
@@ -539,8 +556,32 @@ SELECT
                 trial
         ) THEN 'TRIAL'
         ELSE 'COMMERCIAL'
-    END AS [Trial_Commercial]
+    END AS [Trial_Commercial],
+    BC.CreatedDate AS BC_OPP_CREATED_DATE,
+    BC.Id AS BC_OPP_ID,
+    BC.Name AS BC_OPP_NAME,
+    BC.Owner_Name__c AS BC_OPP_OWNER,
+    BC.Current_Status__c AS BC_CURRENT_STATUS,
+    BC.Status__c AS BC_STAGE,
+    CASE
+        WHEN BC.ID IS NOT NULL
+        AND LEFT(BC.Status__c, 2) <> '13'
+        AND (
+            BC.Current_Status__c IS NULL
+            OR BC.Current_Status__c IN ('New', 'Qualified', 'In Progress')
+        )
+        AND BC.RecordTypeId = '012UY000003kPg2YAE'
+        AND BC.Active__c = 1 THEN 1
+        ELSE 0
+    END AS BC_OPEN_OPP,
+    CASE
+        WHEN Application_Type__c = 'PRP'
+        AND Consent_Complete__c = 1 THEN 'PRP'
+        WHEN Application_Type__c = 'DTC' THEN 'DTC'
+        ELSE 'ORGANIC'
+    END AS SOURCE_V2
 FROM
     qOpps A
     LEFT JOIN VA_CALC ON A.DHC_IDN_NAME__C = VA_CALC.DHC_IDN_NAME__C
     AND VA_CALC.YYYYMM = A.IMPLANTED_YYYYMM
+    LEFT JOIN BC ON A.OPP_ID = BC.Opportunity__c
