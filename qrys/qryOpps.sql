@@ -80,10 +80,7 @@ WITH qOpps AS (
                 D.SHIPPINGCITY,
                 D.SHIPPINGCOUNTRYCODE,
                 d.SHIPPINGSTREET,
-                CASE
-                    WHEN D.DHC_IDN_NAME__C = 'HCA Healthcare' THEN 'HCA Healthcare (FKA Hospital Corporation of America)'
-                    ELSE D.DHC_IDN_NAME__C
-                END AS DHC_IDN_NAME__C,
+                D.DHC_IDN_NAME__C,
                 D.PRIMARY_GPO__C,
                 G.Rep AS SALES_CREDIT_REP,
                 G.EMAIL AS SALES_CREDIT_REP_EMAIL,
@@ -380,7 +377,8 @@ WITH qOpps AS (
                     WHEN A.STAGENAME = 'Cancelled' THEN 0
                     ELSE 1
                 END AS ISIMPL,
-                A.LASTMODIFIEDDATE
+                A.LASTMODIFIEDDATE,
+                RELATED_PATIENT__C
             FROM
                 dbo.sfdcOpps AS A
                 LEFT JOIN (
@@ -451,7 +449,8 @@ VA_HCA AS (
                         DHC_IDN_NAME__C IN (
                             'Department of Veterans Affairs',
                             'Department of Veterans Affairs (AKA Veterans Health Administration)',
-                            'HCA Healthcare (FKA Hospital Corporation of America)'
+                            'HCA Healthcare (FKA Hospital Corporation of America)',
+                            'HCA Healthcare'
                         )
                 ) O
             WHERE
@@ -470,7 +469,8 @@ VA_HCA AS (
                 DHC_IDN_NAME__C IN (
                     'Department of Veterans Affairs',
                     'Department of Veterans Affairs (AKA Veterans Health Administration)',
-                    'HCA Healthcare (FKA Hospital Corporation of America)'
+                    'HCA Healthcare (FKA Hospital Corporation of America)',
+                    'HCA Healthcare'
                 )
                 AND OPP_STATUS = 'CLOSED'
             GROUP BY
@@ -511,6 +511,14 @@ VA_CALC AS (
         ) [ASP_r12]
     FROM
         VA_HCA
+),
+trial AS (
+    SELECT
+        RELATED_OPPORTUNITY__C
+    FROM
+        sfdcProc
+    WHERE
+        TRIAL__C = 'a0aUY00000PjNA9YAN'
 )
 SELECT
     A.*,
@@ -522,7 +530,16 @@ SELECT
         WHEN STAGENAME = 'Revenue Recognized'
         AND VA_CALC.ASP_r12 IS NULL THEN SALES
         ELSE 0
-    END AS SALES_COMMISSIONABLE
+    END AS SALES_COMMISSIONABLE,
+    CASE
+        WHEN OPP_ID IN (
+            SELECT
+                *
+            FROM
+                trial
+        ) THEN 'TRIAL'
+        ELSE 'COMMERCIAL'
+    END AS [Trial_Commercial]
 FROM
     qOpps A
     LEFT JOIN VA_CALC ON A.DHC_IDN_NAME__C = VA_CALC.DHC_IDN_NAME__C
