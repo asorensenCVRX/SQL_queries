@@ -61,13 +61,13 @@ SELECT
     A.REGION_ID,
     A.SALES,
     A.REVENUE_UNITS,
-    A.TGT_PO,
     A.YTD_SALES,
     A.REGIONAL_TGT,
     A.FY_PLAN,
     A.[%_FY_PLAN],
     A.REGIONAL_PO,
-    REGIONAL_PO + ISNULL(TGT_PO, 0) AS TOTAL_PO
+    C.CS_SPIFF_PAYOUT,
+    REGIONAL_PO + ISNULL(CS_SPIFF_PAYOUT, 0) AS TOTAL_PO
     /******/
     -- INTO tmpCS_PO
     /******/
@@ -87,3 +87,16 @@ FROM
     LEFT JOIN qryRoster R ON R.REP_EMAIL = SALES_CREDIT_CS_EMAIL
     AND R.[isLATEST?] = 1
     AND R.ROLE = 'FCE'
+    LEFT JOIN (
+        SELECT
+            CREATED_BY_EMAIL,
+            CREATED_YYYYMM,
+            SUM(CS_SPIFF_PAYOUT) AS CS_SPIFF_PAYOUT
+        FROM
+            qryCS_SPIFF
+        WHERE
+            CREATED_YYYYMM = @YYYYMM
+        GROUP BY
+            CREATED_BY_EMAIL,
+            CREATED_YYYYMM
+    ) AS C ON A.SALES_CREDIT_CS_EMAIL = C.CREATED_BY_EMAIL
