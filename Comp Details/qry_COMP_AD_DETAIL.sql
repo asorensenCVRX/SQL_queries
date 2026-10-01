@@ -34,16 +34,27 @@ WITH ROSTER AS (
 ALIGNMENT AS (
     /* use this to align termed reps */
     SELECT
-        DISTINCT REP_EMAIL,
+        DISTINCT R.ROLE,
+        REP_EMAIL,
         NAME_REP,
-        REGION_ID,
-        RM_EMAIL,
-        LEFT(REGION_NM, CHARINDEX('(', REGION_NM) - 2) AS REGION_NM
+        T.TERRITORY,
+        RM.EMP_EMAIL AS RM_EMAIL,
+        ISNULL(T.REGION_ID, R.REGION_ID) AS REGION_ID,
+        ISNULL(
+            T.REGION,
+            LEFT(R.REGION_NM, CHARINDEX('(', REGION_NM) - 2)
+        ) AS REGION_NM,
+        T.START_DT,
+        T.END_DT,
+        COUNT(*) OVER (PARTITION BY REP_EMAIL) AS COUNT
     FROM
-        qryRoster
+        qryRoster R
+        LEFT JOIN tblTerritory T ON R.TERRITORY_ID = T.TERRITORY_ID
+        AND R.[ROLE] = 'REP'
+        LEFT JOIN qryRoster_RM RM ON RM.TERRITORY_ID = ISNULL(T.REGION_ID, R.REGION_ID)
     WHERE
-        role IN ('REP', 'FCE', 'ATM')
-        AND [isLATEST?] = 1
+        [isLATEST?] = 1
+        AND R.[ROLE] IN ('REP', 'FCE', 'ATM')
 ),
 OPPS AS (
     SELECT
@@ -294,6 +305,14 @@ FROM
                     RIGHT JOIN OPPS ON ROSTER.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
                     AND ROSTER.YYYYMM = OPPS.CLOSE_YYYYMM
                     LEFT JOIN ALIGNMENT ON ALIGNMENT.REP_EMAIL = OPPS.SALES_CREDIT_REP_EMAIL
+                    AND OPPS.CLOSEDATE BETWEEN CASE
+                        WHEN ALIGNMENT.[ROLE] = 'REP' THEN START_DT
+                        ELSE CAST('1900-01-01' AS DATE)
+                    END
+                    AND CASE
+                        WHEN ALIGNMENT.[ROLE] = 'REP' THEN END_DT
+                        ELSE CAST('2099-12-31' AS DATE)
+                    END
                     LEFT JOIN tblRates_RM R ON R.REGION_ID = ISNULL(ROSTER.REGION_ID, ALIGNMENT.REGION_ID)
                     LEFT JOIN QUOTA ON ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL) = QUOTA.EID
                     AND OPPS.CLOSE_YYYYQQ = QUOTA.YYYYQQ
