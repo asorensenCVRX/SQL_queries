@@ -1,7 +1,6 @@
 /* set YYYYMM as last month in the format yyyy_MM */
 DECLARE @YYYYMM AS VARCHAR(7) = FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM');
 
-
 WITH DETAIL AS (
     SELECT
         SALES_CREDIT_CS_EMAIL,
@@ -24,14 +23,6 @@ WITH DETAIL AS (
                 ELSE 0
             END
         ) AS REVENUE_UNITS,
-        SUM(
-            /* targets are paid on both implant completed or rev rec'd */
-            /* ensure that targets are only paid out for the month they were implanted OR closed,
-             depending on if it's an implant target or a revenue target */
-            CASE
-                WHEN TGT_PO_YYYYMM = @YYYYMM THEN TGT_PO
-            END
-        ) AS TGT_PO,
         ISNULL(
             MAX(
                 CASE
@@ -66,8 +57,8 @@ SELECT
     A.FY_PLAN,
     A.[%_FY_PLAN],
     A.REGIONAL_PO,
-    C.CS_SPIFF_PAYOUT,
-    REGIONAL_PO + ISNULL(CS_SPIFF_PAYOUT, 0) AS TOTAL_PO
+    C.NEW_OPP_SUBMISSION_PAYOUT + ISNULL(C2.CPAS_PAYOUT, 0) AS CS_SPIFF_PAYOUT,
+    REGIONAL_PO + ISNULL(C.NEW_OPP_SUBMISSION_PAYOUT, 0) + ISNULL(C2.CPAS_PAYOUT, 0) AS TOTAL_PO
     /******/
     -- INTO tmpCS_PO
     /******/
@@ -91,7 +82,7 @@ FROM
         SELECT
             CREATED_BY_EMAIL,
             CREATED_YYYYMM,
-            SUM(CS_SPIFF_PAYOUT) AS CS_SPIFF_PAYOUT
+            SUM(NEW_OPP_SUBMISSION_PAYOUT) AS NEW_OPP_SUBMISSION_PAYOUT
         FROM
             qryCS_SPIFF
         WHERE
@@ -100,3 +91,16 @@ FROM
             CREATED_BY_EMAIL,
             CREATED_YYYYMM
     ) AS C ON A.SALES_CREDIT_CS_EMAIL = C.CREATED_BY_EMAIL
+    LEFT JOIN (
+        SELECT
+            CREATED_BY_EMAIL,
+            CPAS_SUBMIT_YYYYMM,
+            SUM(CPAS_PAYOUT) AS CPAS_PAYOUT
+        FROM
+            qryCS_SPIFF
+        WHERE
+            CPAS_SUBMIT_YYYYMM = @YYYYMM
+        GROUP BY
+            CREATED_BY_EMAIL,
+            CPAS_SUBMIT_YYYYMM
+    ) AS C2 ON A.SALES_CREDIT_CS_EMAIL = C2.CREATED_BY_EMAIL
