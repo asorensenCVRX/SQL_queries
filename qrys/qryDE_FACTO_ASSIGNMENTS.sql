@@ -205,6 +205,7 @@ Q AS (
         --     WHEN P.[STATUS] NOT IN ('Active', 'Dormant', 'Churned', 'At-Risk') THEN NULL
         --     ELSE P.[STATUS]
         -- END AS STAGE,
+        A.SHIPPINGSTREET,
         A.SHIPPINGCITY,
         A.SHIPPINGSTATECODE,
         A.SHIPPINGPOSTALCODE
@@ -248,4 +249,15 @@ SELECT
     T.TERRITORY AS DE_FACTO_TERR_NM
 FROM
     Q
-    LEFT JOIN tblTerritory T ON Q.DE_FACTO_TERR = T.TERRITORY_ID
+    LEFT JOIN (
+        SELECT
+            TOP (1) WITH TIES *
+        FROM
+            tblTerritory
+        ORDER BY
+            ROW_NUMBER() OVER (
+                PARTITION BY TERRITORY_ID
+                ORDER BY
+                    END_DT DESC
+            )
+    ) T ON Q.DE_FACTO_TERR = T.TERRITORY_ID;
