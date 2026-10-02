@@ -145,7 +145,8 @@ FROM
                     /* sales splits */
                     LEFT JOIN tblSalesSplits S ON S.OPP_ID = SALES.OPP_ID
                     /* Baylor Scott & White 48-pack -- full amount paid to clinicals in December of 2025*/
-                    AND S.OPP_ID NOT IN ('006UY00000U6L5LYAV')
+                    /* Baylor Scott & White 50-pack -- full amount paid to clinicals in September of 2026*/
+                    AND S.OPP_ID NOT IN ('006UY00000U6L5LYAV', '006UY00000dyKAHYA2')
             ) AS A
             /* bring in CS targets */
             LEFT JOIN tblACCT_TGT FTP ON A.SALES_CREDIT_CS_EMAIL = FTP.EMAIL
