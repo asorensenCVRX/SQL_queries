@@ -1,11 +1,14 @@
 WITH R AS (
     SELECT
-        [ROLE],
+        REPLACE([ROLE], 'REP', 'TM') AS [ROLE],
         NAME_REP,
         REP_EMAIL,
         TERRITORY_ID,
-        DOH,
-        DOT
+        TERRITORY,
+        REGION,
+        -- DOH,
+        -- DOT,
+        ROLE_START_DT
     FROM
         qryRoster
     WHERE
@@ -13,7 +16,7 @@ WITH R AS (
         AND [ROLE] = 'REP'
         AND [STATUS] = 'ACTIVE'
 ),
-RATES AS (
+P_RATES AS (
     SELECT
         EID,
         TERRITORY_ID,
@@ -24,19 +27,42 @@ RATES AS (
     GROUP BY
         EID,
         TERRITORY_ID
+),
+Q0 AS (
+    SELECT
+        R.*,
+        ROUND(CAST(P_RATES.THRESHOLD AS MONEY), 2) AS PRORATED_THRESHOLD,
+        ROUND(CAST(P_RATES.[PLAN] AS MONEY), 2) AS [PRORATED_PLAN],
+        ROUND(CAST(P_RATES.THRESHOLD *.2 AS MONEY), 2) AS PRORATED_L1_PO,
+        ROUND(
+            CAST(
+                (P_RATES.[PLAN] - P_RATES.THRESHOLD) *.25 AS MONEY
+            ),
+            2
+        ) AS PRORATED_L2_PO
+    FROM
+        R
+        LEFT JOIN P_RATES ON R.REP_EMAIL = P_RATES.EID
+),
+Q1 AS (
+    SELECT
+        Q0.*,
+        PRORATED_L1_PO + PRORATED_L2_PO AS [PRORATED_2026_TARGET_PO],
+        ROUND(CAST(T.THRESHOLD AS MONEY), 2) AS FY_THRESHOLD,
+        ROUND(CAST(T.[PLAN] AS MONEY), 2) AS FY_PLAN,
+        ROUND(CAST(T.THRESHOLD *.2 AS MONEY), 2) AS FY_L1_PO,
+        ROUND(
+            CAST(
+                (T.[PLAN] - T.THRESHOLD) *.25 AS MONEY
+            ),
+            2
+        ) AS FY_L2_PO
+    FROM
+        Q0
+        LEFT JOIN tblRates_TM T ON Q0.TERRITORY_ID = T.TERRITORY_ID
 )
 SELECT
     *,
-    L1_PO + L2_PO AS [2025_TARGET_PO]
+    FY_L1_PO + FY_L2_PO AS [FY_2026_TARGET_PO]
 FROM
-    (
-        SELECT
-            R.*,
-            ROUND(CAST(RATES.THRESHOLD AS MONEY), 2) AS THRESHOLD,
-            ROUND(CAST(RATES.[PLAN] AS MONEY), 2) AS [PLAN],
-            ROUND(CAST(THRESHOLD *.2 AS MONEY), 2) AS L1_PO,
-            ROUND(CAST(([PLAN] - THRESHOLD) *.25 AS MONEY), 2) AS L2_PO
-        FROM
-            R
-            LEFT JOIN RATES ON R.REP_EMAIL = RATES.EID
-    ) AS A
+    Q1
