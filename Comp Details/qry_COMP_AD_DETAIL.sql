@@ -1,17 +1,16 @@
 -- CREATE VIEW qry_COMP_ASD_DETAIL AS 
 WITH ROSTER AS (
-    /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
-     or is null, and DOH is before or equal to last month. */
     SELECT
-        RL.*,
+        R.*,
         C.*
     FROM
-        qryReport_Ladder RL
+        qryRoster R
         /* Bring in all months up to and including the current month.
          This is necessary to make even reps with no sales show up in the comp month. */
         CROSS JOIN (
             SELECT
                 DISTINCT YYYYMM,
+                MONTH_END_DATE,
                 YYYYQQ,
                 YYYYHH
             FROM
@@ -22,14 +21,10 @@ WITH ROSTER AS (
         ) C
     WHERE
         ROLE IN ('REP', 'FCE')
-        AND (
-            FORMAT(DOT, 'yyyy-MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy-MM')
-            OR DOT IS NULL
-        )
-        AND (
-            FORMAT(DOH, 'yyyy_MM') <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
-            OR DOH IS NULL
-        )
+        /* Pull in all reps from qryReport_Ladder where DOT is greater than or equal to last month 
+         or is null, and DOH is before or equal to last month. */
+        AND FORMAT(ISNULL(DOT, '2099-12-13'), 'yyyy_MM') >= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
+        AND FORMAT(ISNULL(DOH, '1900-01-01'), 'yyyy_MM') <= FORMAT(DATEADD(MONTH, -1, GETDATE()), 'yyyy_MM')
 ),
 ALIGNMENT AS (
     /* use this to align termed reps */
@@ -51,10 +46,9 @@ ALIGNMENT AS (
         qryRoster R
         LEFT JOIN tblTerritory T ON R.TERRITORY_ID = T.TERRITORY_ID
         AND R.[ROLE] = 'REP'
-        LEFT JOIN qryRoster_RM RM ON RM.TERRITORY_ID = ISNULL(T.REGION_ID, R.REGION_ID)
+        LEFT JOIN qryRoster_RM RM ON ISNULL(T.REGION_ID, R.REGION_ID) = RM.TERRITORY_ID
     WHERE
         [isLATEST?] = 1
-        AND R.[ROLE] IN ('REP', 'FCE', 'ATM')
 ),
 OPPS AS (
     SELECT
@@ -134,7 +128,7 @@ OPPS AS (
         /* check tblAlign_Opp */
         LEFT JOIN tblAlign_Opp AO ON O.OPP_ID = AO.OPP_ID
         /* check tblAlign_Act */
-        LEFT JOIN tblAlign_Act AA ON O.ACT_ID = AA.ACT_ID
+        LEFT JOIN qryAlign_Act AA ON O.ACT_ID = AA.ACT_ID
         AND O.CLOSEDATE BETWEEN AA.ST_DT
         AND AA.END_DT
         LEFT JOIN tblSalesSplits S ON O.OPP_ID = S.OPP_ID
@@ -203,9 +197,9 @@ QUOTA AS (
 ),
 Q1 AS (
     SELECT
-        ISNULL(ROSTER.REGION_NM, ALIGNMENT.REGION_NM) AS REGION_NM,
-        ISNULL(ROSTER.REGION_ID, ALIGNMENT.REGION_ID) AS REGION_ID,
-        ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL) AS SALES_CREDIT_ASD_EMAIL,
+        ISNULL(ALIGNMENT.REGION_NM, ROSTER.REGION_NM) AS REGION_NM,
+        ISNULL(ALIGNMENT.REGION_ID, ROSTER.REGION_ID) AS REGION_ID,
+        ISNULL(ALIGNMENT.RM_EMAIL, ROSTER.RM_EMAIL) AS SALES_CREDIT_ASD_EMAIL,
         SALES_CREDIT_REP_EMAIL,
         OPPS.CLOSEDATE,
         CLOSE_YYYYMM,
@@ -247,7 +241,7 @@ Q1 AS (
                 0
             )
         ) OVER (
-            PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
+            PARTITION BY ISNULL(ALIGNMENT.RM_EMAIL, ROSTER.RM_EMAIL),
             OPPS.CLOSE_YYYYQQ
             ORDER BY
                 OPPS.CLOSEDATE,
@@ -256,7 +250,7 @@ Q1 AS (
         ) AS QTD_SALES_COMMISSIONABLE,
         /* make sure implants are only counted based on impl date, not closedate */
         SUM(ISNULL(IMPLANT_UNITS, 0)) OVER(
-            PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
+            PARTITION BY ISNULL(ALIGNMENT.RM_EMAIL, ROSTER.RM_EMAIL),
             OPPS.IMPLANTED_YYYYQQ
             ORDER BY
                 ISNULL(OPPS.IMPLANTED_DT, OPPS.CLOSEDATE),
@@ -264,7 +258,7 @@ Q1 AS (
                 OPPS.SALES_CREDIT_REP_EMAIL ROWS UNBOUNDED PRECEDING
         ) AS QTD_IMPLANT_UNITS,
         SUM(ISNULL(REVENUE_UNITS, 0)) OVER(
-            PARTITION BY ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL),
+            PARTITION BY ISNULL(ALIGNMENT.RM_EMAIL, ROSTER.RM_EMAIL),
             OPPS.CLOSE_YYYYQQ
             ORDER BY
                 OPPS.CLOSEDATE,
@@ -284,8 +278,8 @@ Q1 AS (
             WHEN ALIGNMENT.[ROLE] = 'REP' THEN END_DT
             ELSE CAST('2099-12-31' AS DATE)
         END
-        LEFT JOIN tblRates_RM R ON R.REGION_ID = ISNULL(ROSTER.REGION_ID, ALIGNMENT.REGION_ID)
-        LEFT JOIN QUOTA ON ISNULL(ROSTER.RM_EMAIL, ALIGNMENT.RM_EMAIL) = QUOTA.EID
+        LEFT JOIN tblRates_RM R ON R.REGION_ID = ISNULL(ALIGNMENT.REGION_ID, ROSTER.REGION_ID)
+        LEFT JOIN QUOTA ON ISNULL(ALIGNMENT.RM_EMAIL, ROSTER.RM_EMAIL) = QUOTA.EID
         AND OPPS.CLOSE_YYYYQQ = QUOTA.YYYYQQ
 ),
 Q2 AS (
